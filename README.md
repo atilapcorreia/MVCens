@@ -77,6 +77,6 @@
 
  ## 📁 Installation
 
- devtools::install_github("atilapcorreia/mvCensored")
+ devtools::install_github("atilapcorreia/MVCens")
 
  ---
