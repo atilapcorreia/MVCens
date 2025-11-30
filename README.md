@@ -5,7 +5,7 @@
 
  ✨ Overview
 
- mvCensored is an R package for simulating and fitting matrix-variate
+ MVCens is an R package for simulating and fitting matrix-variate
  statistical models, with dedicated support for:
 
  - Matrix-Variate Normal (MVN) distributions
