@@ -1,0 +1,37 @@
+Package: MVCens
+Title: Matrix-Variate Models with Censoring and Missing Data
+Version: 0.0.0.9000
+Authors@R: 
+    c(
+      person("Átila", "Correia", email = "atilapc1989@gmail.com",
+             role = c("aut", "cre")),
+      person("Victor", "Lachos", email = "hlachos@uconn.edu",
+             role = "aut"),
+      person("Carlos", "Diniz", email = "dcad@ufscar.br",
+             role = "ctb")
+    )
+Description: Tools for generating and estimating matrix-variate Normal (MVN) and 
+    matrix-variate Skew-Normal (MVSN) models with or without interval censoring 
+    and missing data. The package includes functions to simulate uncensored and 
+    censored matrix-valued observations from MVN and MVSN distributions. 
+    Estimation routines cover maximum likelihood estimation for complete MVN 
+    data, EM algorithms for complete MVSN data, and ECM-type procedures for 
+    MVN and MVSN models under interval censoring and missingness. Core 
+    functionality includes generation of matrix-variate samples based on the 
+    skew-normal representation X = M + A|Z| + V, simulation of censored MVN and 
+    MVSN observations, likelihood evaluation, and EM/ECM inference methods that 
+    jointly account for skewness, censoring, and incomplete data in 
+    matrix-valued settings.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports:
+    LaplacesDemon,
+    Matrix,
+    matrixNormal,
+    mnormt,
+    MomTrunc,
+    mvtnorm,
+    stats,
+    tlrmvnmvt
