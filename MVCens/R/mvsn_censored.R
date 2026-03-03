@@ -153,7 +153,7 @@ loglikelSN <- function(dados, muM, AM, SigmaM, PsiM){
 
 }
 
-##### Log-likelihood Matrix skew-normal censored
+##### Log-likelihood Matrix skew-normal censored #####
 
 logLikCensSN <- function(cc, LS, dados, muM, SigmaM, PsiM, lambdaM){
 
@@ -265,10 +265,12 @@ somaL3 <- function(L1, Sigma, Psi){
 #' @param Ind Integer indicating the type of censoring:
 #'   1 = symmetric interval censoring (left and right),
 #'   2 = missing,
-#'   3 = mixed censoring (half missing values and half censored values).
-#' @param M Mean matrix with dimensions p by q.
-#' @param U Row covariance matrix with dimensions p by p.
-#' @param V Column covariance matrix with dimensions q by q.
+#'   3 = mixed censoring (half missing values and half censored values),
+#'   4 = left censoring,
+#'   5 = right censoring.
+#' @param M Location matrix with dimensions p by q.
+#' @param U Row scale matrix with dimensions p by p.
+#' @param V Column scale matrix with dimensions q by q.
 #' @param A Skewness matrix with dimensions p by q. Used only when
 #'   dist = "SN".
 #' @param dist Character string indicating the distribution. Use "Normal"
@@ -277,7 +279,7 @@ somaL3 <- function(L1, Sigma, Psi){
 #' @return A list with components:
 #' \itemize{
 #'   \item \code{X.cens}: Censored data as an array of size p by q by n.
-#'   \item \code{cc}: Censoring indicator matrix (1 means censored, 0 means observed).
+#'   \item \code{cc}: Censoring indicator array (1 means censored, 0 means observed).
 #'   \item \code{LS}: Upper limits associated with censoring.
 #' }
 #'
@@ -332,7 +334,7 @@ somaL3 <- function(L1, Sigma, Psi){
 #' # Extract components
 #' X_normal  <- out_normal$X.cens   # true observations or lower censoring limits
 #' cc_normal <- out_normal$cc       # censoring indicators
-#' LS_normal <- out_normal$LS       # upper censoring limits
+#' LS_normal <- out_normal$LS       # upper censoring limits or zero otherwise
 #'
 #'
 #' # ---------------------------------------------------------
@@ -450,6 +452,38 @@ rmatrix_censored <- function(n = n, cens = cens, Ind = 1, M = M, U = U, V = V, A
     X.cens[cc==1][(n1+1):(n1+n2)] <- X.cens[cc==1][(n1+1):(n1+n2)]-2*sd(X.or[cc==1][(n1+1):(n1+n2)]) # allocate the lower limit in the  data (for missing use -Inf)
 
     }
+
+  if(Ind==4){
+
+    LS <- X.cens <- X.or
+
+    cutoff <- stats::quantile(X.cens, prob = cens)
+
+    cc<-(X.cens < cutoff) + 0
+
+    LS[cc==1] <- +Inf
+
+    LS[cc==0] <- 0   ## LS, when observed (cc==0) can be any value for data points
+
+    X.cens[cc==1] <- X.cens[cc==1] - 2 * sd(X.or[cc==1]) # allocate the lower limit in the  data (for missing use -Inf)
+
+  }
+
+  if(Ind==5){
+
+    LS <- X.cens <- X.or
+
+    cutoff <- stats::quantile(X.cens, prob = cens)
+
+    cc<-(X.cens < cutoff) + 0
+
+    LS[cc==1] <- X.cens[cc==1] + 2 * sd(X.or[cc==1])
+
+    LS[cc==0] <- 0   ## LS, when observed (cc==0) can be any value for data points
+
+    X.cens[cc==1] <- -Inf # allocate the lower limit in the  data (for missing use -Inf)
+
+  }
 
   return(list(X.cens = X.cens, cc = cc, LS = LS))
 
@@ -644,7 +678,7 @@ mvsn_ecm <- function(dados, precision=0.00000001, MaxIter=50){
 
   BIC <- -2 * loglik[count] + npar * log(n)
 
-  obj.out <- list(mu = mu, A = A, Sigma = Sigma, Psi = Psi, loglik = loglik[count], BIC = BIC, iter = count)
+  obj.out <- list(mu = mu, A = A, Sigma = Sigma, Psi = Psi, loglik = loglik, BIC = BIC, iter = count)
 
   class(obj.out) <- "EM.MatrixSN"
 
@@ -842,9 +876,9 @@ mvsnc_ecm <- function(dados, cc, LS, precision=0.0000001, MaxIter = 50){
 
               w2.hat =  aux3$EYY
 
-              Ltemp  = prob_opt(lower = c(y1[cc1==1]),upper = c(LS1[cc1==1]),c(muc - mub.cc),sigma = Gamma.cc, nu = NULL, uselog2 = TRUE)
+              Ltemp  = prob_opt(lower = c(y1[cc1==1]), upper = c(LS1[cc1==1]), mean = c(muc - mub.cc), sigma = Gamma.cc, nu = NULL, uselog2 = TRUE)
 
-              LLtemp = MomTrunc::pmvESN(lower = y1[cc1==1], upper = LS1[cc1==1],mu = as.vector(muc),Sigma = Sc,lambda = lambda.co,tau = tau.co,log2 = TRUE)
+              LLtemp = MomTrunc::pmvESN(lower = y1[cc1==1], upper = LS1[cc1==1], mu = as.vector(muc),Sigma = Sc,lambda = lambda.co,tau = tau.co,log2 = TRUE)
 
               gamma.cc  = eta.cc*2^(Ltemp - LLtemp)
 

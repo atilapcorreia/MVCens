@@ -25,13 +25,15 @@ the 15 percent quantile.}
 \item{Ind}{Integer indicating the type of censoring:
 1 = symmetric interval censoring (left and right),
 2 = missing,
-3 = mixed censoring (half missing values and half censored values).}
+3 = mixed censoring (half missing values and half censored values),
+4 = left censoring,
+5 = right censoring.}
 
-\item{M}{Mean matrix with dimensions p by q.}
+\item{M}{Location matrix with dimensions p by q.}
 
-\item{U}{Row covariance matrix with dimensions p by p.}
+\item{U}{Row scale matrix with dimensions p by p.}
 
-\item{V}{Column covariance matrix with dimensions q by q.}
+\item{V}{Column scale matrix with dimensions q by q.}
 
 \item{A}{Skewness matrix with dimensions p by q. Used only when
 dist = "SN".}
@@ -43,7 +45,7 @@ for MVN or "SN" for MVSN.}
 A list with components:
 \itemize{
 \item \code{X.cens}: Censored data as an array of size p by q by n.
-\item \code{cc}: Censoring indicator matrix (1 means censored, 0 means observed).
+\item \code{cc}: Censoring indicator array (1 means censored, 0 means observed).
 \item \code{LS}: Upper limits associated with censoring.
 }
 }
@@ -97,7 +99,7 @@ out_normal <- rmatrix_censored(
 # Extract components
 X_normal  <- out_normal$X.cens   # true observations or lower censoring limits
 cc_normal <- out_normal$cc       # censoring indicators
-LS_normal <- out_normal$LS       # upper censoring limits
+LS_normal <- out_normal$LS       # upper censoring limits or zero otherwise
 
 
 # ---------------------------------------------------------

@@ -23,14 +23,15 @@ A 3D array of generated samples with dimensions
 }
 \description{
 Generates a sample of matrices following the matrix-variate skew-normal
-model \eqn{X = M + A |Z| + \mathcal{V}}, where \eqn{Z \sim N(0,1)} and
+model \eqn{X = M + A|W| + \mathcal{V}}, where \eqn{W \sim N(0,1)} and
 \eqn{\mathcal{V} \sim \mathcal{MVN}_{p \times q}(0, U, V)}.
 }
 \details{
 To be more precise, this function simulates a sample of size \eqn{n}
 using the stochastic representation:
-\deqn{X_i = A|Z_i| + \text{rmatrixnorm}(M, U, V),}
-where \code{rmatrixnorm()} is provided by the \pkg{LaplacesDemon} package.
+\deqn{X_{i} = M + A|W_{i}| + \mathcal{V}_{i}}
+where \deqn{\mathcal{V}_{i}} is generated using \code{rmatrixnorm()},
+which is provided by the \pkg{LaplacesDemon} package.
 }
 \examples{
 p <- 3

@@ -10,18 +10,18 @@ Authors@R:
       person("Carlos", "Diniz", email = "dcad@ufscar.br",
              role = "ctb")
     )
+Author: Átila Correia [aut, cre], Victor Lachos [aut], Carlos Diniz [ctb]
+Maintainer: Átila Correia <atilapc1989@gmail.com>
 Description: Tools for generating and estimating matrix-variate Normal (MVN) and 
     matrix-variate Skew-Normal (MVSN) models with or without interval censoring 
-    and missing data. The package includes functions to simulate uncensored and 
-    censored matrix-valued observations from MVN and MVSN distributions. 
-    Estimation routines cover maximum likelihood estimation for complete MVN 
-    data, EM algorithms for complete MVSN data, and ECM-type procedures for 
-    MVN and MVSN models under interval censoring and missingness. Core 
-    functionality includes generation of matrix-variate samples based on the 
-    skew-normal representation X = M + A|Z| + V, simulation of censored MVN and 
-    MVSN observations, likelihood evaluation, and EM/ECM inference methods that 
-    jointly account for skewness, censoring, and incomplete data in 
-    matrix-valued settings.
+    and missing data. The package provides functions to simulate uncensored and 
+    censored matrix-valued observations from MVN and MVSN distributions, as well 
+    as routines for likelihood evaluation. Estimation procedures include maximum 
+    likelihood for complete MVN data and EM-type algorithms for MVN and MVSN 
+    models under interval censoring or missingness. Core functionality covers the 
+    simulation of matrix-variate samples via the stochastic representation 
+    X = M + A|Z| + V, and the generation of censored and uncensored data for 
+    estimation.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -35,3 +35,6 @@ Imports:
     mvtnorm,
     stats,
     tlrmvnmvt
+Depends: 
+    R (>= 3.5)
+LazyData: true

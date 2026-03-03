@@ -16,17 +16,19 @@ mv_ecm(
 \arguments{
 \item{dist}{A character string specifying the distribution/model to be fitted.
 Options are:
-"MVN"   – Matrix Variate Normal,
+"MVN"   – Matrix Variate Normal for Complete Data,
 "MVNC"  – Censored Matrix Variate Normal,
-"MVSN"  – Matrix Variate Skew-Normal,
+"MVSN"  – Matrix Variate Skew-Normal for Complete Data,
 "MVSNC" – Censored Matrix Variate Skew-Normal.}
 
 \item{samples}{A 3D array of dimension p × q × n containing the observed matrix-valued responses.
-For uncensored entries, the array stores the observed values; for censored entries, it stores the lower limits..}
+For uncensored entries, the array stores the observed values; for censored entries, it stores the lower limits.
+This means that it stores the value -Inf when we are dealing with missing data or left censored data with no lower bound.}
 
-\item{cc}{A 3D indicator array with 1 for interval-censored entries and 0 for observed values.}
+\item{cc}{A 3D indicator array with 1 for interval-censored or missing entries and 0 for observed values.}
 
-\item{LS}{A 3D array storing upper limits for interval-censored entries, and 0 for non-censored entries.}
+\item{LS}{A 3D array storing upper limits for interval-censored entries and 0 for non-censored entries.
+If we are dealing with missing data or right censored data with no upper bound, then the LS assumes the value +Inf.}
 
 \item{precision}{Convergence tolerance.}
 
@@ -115,7 +117,7 @@ for (i in 1:n) {
 }
 
 # Run ECM algorithm for the Matrix-Variate Normal model
-out <- mv_ecm("MVN", samples = samples, cc = cc, LS = LS, MaxIter = 20)
+out <- mv_ecm("MVN", samples = samples, cc = NULL, LS = NULL, MaxIter = 20)
 
 # Inspect fitted parameters
 out$mu
@@ -141,7 +143,7 @@ V <- diag(q)
 set.seed(123)
 dados <- rmvsn(n = n, M = M, A = A, U = U, V = V)
 
-out <- mv_ecm("MVSN", samples = dados, cc = cc, LS = LS, MaxIter = 20)
+out <- mv_ecm("MVSN", samples = dados, cc = NULL, LS = NULL, MaxIter = 20)
 out$mu
 out$A
 out$Sigma
