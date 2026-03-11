@@ -113,7 +113,7 @@ Please refer to the function documentation for the complete list of arguments an
 
 This package is distributed under the terms of the license provided in the repository.
 
-## 📊 Example Matrix-Valued Dataset
+## 📊 Quarterly Dow-Jones dividends and divisor, 1920-1934
 
 The object `dj_data` is an example of a matrix-valued longitudinal dataset
 represented as a named list of annual matrices spanning the years 1920 to
