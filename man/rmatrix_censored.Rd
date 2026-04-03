@@ -11,7 +11,7 @@ rmatrix_censored(
   M = M,
   U = U,
   V = V,
-  A = A,
+  A = NULL,
   dist = "SN"
 )
 }

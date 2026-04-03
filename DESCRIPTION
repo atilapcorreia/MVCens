@@ -10,18 +10,13 @@ Authors@R:
       person("Carlos", "Diniz", email = "dcad@ufscar.br",
              role = "ctb")
     )
-Description: Tools for generating and estimating matrix-variate Normal (MVN) and 
-    matrix-variate Skew-Normal (MVSN) models with or without interval censoring 
-    and missing data. The package includes functions to simulate uncensored and 
-    censored matrix-valued observations from MVN and MVSN distributions. 
-    Estimation routines cover maximum likelihood estimation for complete MVN 
-    data, EM algorithms for complete MVSN data, and ECM-type procedures for 
-    MVN and MVSN models under interval censoring and missingness. Core 
-    functionality includes generation of matrix-variate samples based on the 
-    skew-normal representation X = M + A|Z| + V, simulation of censored MVN and 
-    MVSN observations, likelihood evaluation, and EM/ECM inference methods that 
-    jointly account for skewness, censoring, and incomplete data in 
-    matrix-valued settings.
+Description: Tools for simulation and inference for matrix-variate Normal (MVN) and matrix-variate Skew-Normal (MVSN) models with complete,
+	     interval-censored, and missing data. Provides functions for generating uncensored and censored matrix-valued observations,
+	     evaluating likelihoods, and estimating model parameters via maximum likelihood, EM, and ECM-type algorithms. The implemented methods
+	     cover complete MVN data, complete MVSN data, and MVN/MVSN models under interval censoring and missingness. Core functionality relies
+	     on the skew-normal representation X = M + A|Z| + V, enabling joint modeling of skewness, censoring, and incomplete observations in
+	     matrix-valued settings. Also includes the dj_data dataset, consisting of yearly 4 x 2 matrix-valued observations from 1920 to 1934,
+	     for examples and methodological illustration.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -35,3 +30,6 @@ Imports:
     mvtnorm,
     stats,
     tlrmvnmvt
+Depends: 
+    R (>= 3.5)
+LazyData: true

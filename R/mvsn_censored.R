@@ -41,83 +41,52 @@ invmills = function(x,mu=0,sd=1){
 # This function uses the best (in terms of time/precision) function from the packages above depending of the dimension of the vector,
 # degrees of freedom and even if one method collapses
 
-prob_opt <- function(lower, upper, mean, sigma, nu = NULL, uselog2 = FALSE) {
+prob_opt = function(lower = rep(-Inf, ncol(sigma)),
+                    upper = rep(Inf, ncol(sigma)),
+                    mean  = rep(0, ncol(sigma)),
+                    sigma,
+                    nu = NULL,
+                    uselog2 = FALSE){
 
-    # Coerce inputs
+  mean = c(mean)
 
-    lower <- c(lower)
+  sigma = as.matrix(sigma)
 
-    upper <- c(upper)
+  p = ncol(sigma)
 
-    mean  <- c(mean)
+  if(is.null(nu)){
 
-    sigma <- as.matrix(sigma)
+    # Normal case
+    if(p < 10){
 
-    p     <- ncol(sigma)
+      prob <- mvtnorm::pmvnorm(lower = lower,
+                               upper = upper,
+                               mean  = mean,
+                               sigma = sigma)[1]
 
-    # Input validation
+      if(prob < 0){
 
-    if (length(mean)  != p) stop("mean length must match ncol(sigma)")
+        return(tlrmvnmvt::pmvn(lower = lower,
+                               upper = upper,
+                               mean = mean,
+                               sigma = sigma,
+                               uselog2 = uselog2)[[1]])
 
-    if (length(lower) != p) stop("lower bound length must match ncol(sigma)")
+      } else{
 
-    if (length(upper) != p) stop("upper bound length must match ncol(sigma)")
-
-    # ---- Normal case ----
-
-    if (is.null(nu)) {
-
-      if (p < 10) {
-
-        prob <- tryCatch(mvtnorm::pmvnorm(lower, upper, mean, sigma)[1], error = function(e) NA_real_)
-
-    } else {
-
-        prob <- NA_real_
-
-    }
-
-      if (is.na(prob)) {
-
-        prob <- tlrmvnmvt::pmvn(lower, upper, mean, sigma, uselog2 = FALSE)[[1]]
-
+        return(ifelse(uselog2, log2(prob), prob))
       }
 
+    } else{
+
+      return(tlrmvnmvt::pmvn(lower = lower,
+                             upper = upper,
+                             mean = mean,
+                             sigma = sigma,
+                             uselog2 = uselog2)[[1]])
     }
-
-    # ---- Student-t case ----
-
-    else {
-
-      if (p < 10 && nu %% 1 == 0) {
-
-      # mvtnorm::pmvt doesn’t support mean → shift bounds
-
-          prob <- tryCatch(mvtnorm::pmvt(lower - mean, upper - mean, sigma = sigma, df = nu)[1], error = function(e) NA_real_)
-
-      } else {
-
-          prob <- NA_real_
-
-      }
-
-      if (is.na(prob)) {
-
-        prob <- tlrmvnmvt::pmvt(lower, upper, mean = mean, sigma = sigma, df = nu, uselog2 = FALSE)[[1]]
-
-      }
-
-    }
-
-    # Numerical safeguard
-
-    prob <- max(min(prob, 1), 0)
-
-    # Return
-
-    if (uselog2) return(log2(prob)) else return(prob)
-
   }
+}
 
 dmvSN <- function(y, mu, Sigma, lambda){
 
@@ -357,7 +326,7 @@ somaL3 <- function(L1, Sigma, Psi){
 #' # Display the first generated matrix
 #' X_skew[ , , 1]
 
-rmatrix_censored <- function(n = n, cens = cens, Ind = 1, M = M, U = U, V = V, A = A, dist = "SN"){
+rmatrix_censored <- function(n = n, cens = cens, Ind = 1, M = M, U = U, V = V, A = NULL, dist = "SN"){
 
   p <- ncol(U)
 
@@ -441,7 +410,7 @@ rmatrix_censored <- function(n = n, cens = cens, Ind = 1, M = M, U = U, V = V, A
 
     LS[cc==1][1:n1] <- +Inf
 
-    LS[cc==1][(n1+1):(n1+n2)] <- X.cens[cc==1][(n1+1):(n1+n2)]+2*sd(X.or[cc==1][(n1+1):(n1+n2)])
+    LS[cc==1][(n1+1):(n1+n2)] <- X.cens[cc==1][(n1+1):(n1+n2)] + 2 * sd(X.or[cc==1][(n1+1):(n1+n2)])
 
     LS[cc==0] <- 0  ## LS, when observed (cc==0) can be any value for data points
 
