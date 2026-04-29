@@ -1,35 +1,19 @@
 Package: MVCens
-Title: Matrix-Variate Models with Censoring and Missing Data
+Title: What the Package Does (One Line, Title Case)
 Version: 0.0.0.9000
 Authors@R: 
-    c(
-      person("Átila", "Correia", email = "atilapc1989@gmail.com",
-             role = c("aut", "cre")),
-      person("Victor", "Lachos", email = "hlachos@uconn.edu",
-             role = "aut"),
-      person("Carlos", "Diniz", email = "dcad@ufscar.br",
-             role = "ctb")
-    )
-Description: Tools for simulation and inference for matrix-variate Normal (MVN) and matrix-variate Skew-Normal (MVSN) models with complete,
-	     interval-censored, and missing data. Provides functions for generating uncensored and censored matrix-valued observations,
-	     evaluating likelihoods, and estimating model parameters via maximum likelihood, EM, and ECM-type algorithms. The implemented methods
-	     cover complete MVN data, complete MVSN data, and MVN/MVSN models under interval censoring and missingness. Core functionality relies
-	     on the skew-normal representation X = M + A|Z| + V, enabling joint modeling of skewness, censoring, and incomplete observations in
-	     matrix-valued settings. Also includes the dj_data dataset, consisting of yearly 4 x 2 matrix-valued observations from 1920 to 1934,
-	     for examples and methodological illustration.
+    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
+Description: What the package does (one paragraph).
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Imports:
+Imports: 
     LaplacesDemon,
     Matrix,
     matrixNormal,
     mnormt,
     MomTrunc,
     mvtnorm,
-    stats,
+    statmod,
     tlrmvnmvt
-Depends: 
-    R (>= 3.5)
-LazyData: true
