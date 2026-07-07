@@ -13,9 +13,8 @@
 #'
 #' @return A numeric density value, or log-density if `log = TRUE`.
 #'
-#' @keywords internal
-
-dmvST <- function(y, mu, Sigma, lambda, nu, epsilon = 1e-8, log = FALSE) {
+#' @export
+dmvst <- function(y, mu, Sigma, lambda, nu, epsilon = 1e-8, log = FALSE) {
 
   y      <- as.vector(y)
   mu     <- as.vector(mu)
@@ -100,7 +99,7 @@ dmvST <- function(y, mu, Sigma, lambda, nu, epsilon = 1e-8, log = FALSE) {
 #' Matrix-variate skew-t log-likelihood
 #'
 #' Computes the log-likelihood for complete matrix-variate skew-t data. Each
-#' matrix observation is vectorized and evaluated by `dmvST()`.
+#' matrix observation is vectorized and evaluated by `dmvst()`.
 #'
 #' @param nu Positive scalar. Degrees of freedom.
 #' @param dados Numeric array with dimensions \eqn{p \times q \times n}.
@@ -112,9 +111,8 @@ dmvST <- function(y, mu, Sigma, lambda, nu, epsilon = 1e-8, log = FALSE) {
 #'
 #' @return Numeric scalar containing the total log-likelihood.
 #'
-#' @keywords internal
-
-loglikelST <- function(nu, dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
+#' @export
+loglik_mvst <- function(nu, dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
   if (length(dim(dados)) != 3L) {
     stop("'dados' must be a 3D array.")
   }
@@ -167,7 +165,7 @@ loglikelST <- function(nu, dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
   suma1 <- 0
 
   for (j in seq_len(n)) {
-    suma1 <- suma1 + dmvST(
+    suma1 <- suma1 + dmvst(
       y = as.vector(dados[, , j]),
       mu = mu1,
       Sigma = Vari,
@@ -219,7 +217,6 @@ loglikelST <- function(nu, dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
 #' }
 #'
 #' @keywords internal
-
 mvst_ecm <- function(dados,
                      nu = 4,
                      precision = 1e-8,
@@ -287,7 +284,7 @@ mvst_ecm <- function(dados,
     Ass <- mutij / Mtij
     dj <- as.numeric(t(diff) %*% Gama_inv %*% diff)
 
-    prob <- dmvST(y1, mu1, Vari, A1, nu)
+    prob <- dmvst(y1, mu1, Vari, A1, nu)
     prob <- max(as.numeric(prob), .Machine$double.xmin)
 
     log_det_gama <- as.numeric(determinant(Gama, logarithm = TRUE)$modulus)
@@ -423,7 +420,7 @@ mvst_ecm <- function(dados,
     if (get.nu) {
       opt_nu <- stats::optimize(
         f = function(nu_candidate) {
-          loglikelST(nu_candidate, dados, mu, A, Sigma, Psi, epsilon = epsilon)
+          loglik_mvst(nu_candidate, dados, mu, A, Sigma, Psi, epsilon = epsilon)
         },
         interval = nu_bounds,
         maximum = TRUE,
@@ -433,7 +430,7 @@ mvst_ecm <- function(dados,
       nu <- opt_nu$maximum
       loglik[count] <- opt_nu$objective
     } else {
-      loglik[count] <- loglikelST(nu, dados, mu, A, Sigma, Psi, epsilon = epsilon)
+      loglik[count] <- loglik_mvst(nu, dados, mu, A, Sigma, Psi, epsilon = epsilon)
     }
 
     criterio <- compute_ecm_criterion(loglik, count)

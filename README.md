@@ -1,13 +1,19 @@
 # MVCens
 
-`MVCens` is an R package for simulation and likelihood-based estimation of matrix-variate statistical models, with particular emphasis on **censoring**, **missing values**, **asymmetry**, and **heavy-tailed behavior**.
+`MVCens` is an R package for simulation and likelihood-based estimation of matrix-variate statistical models,
+with particular emphasis on **censoring**, **missing values**, **asymmetry**, and **heavy-tailed behavior**.
 
-The package is intentionally designed around two user-facing functions:
+Supported models include matrix-variate normal, skew-normal, skew-(t),
+normal-inverse Gaussian, variance-gamma, row skew-normal, and censored
+counterparts where applicable.
 
-- `mv_random()` — unified random generation for matrix-variate models;
-- `mv_fit()` — unified ECM-based estimation interface.
+The package is intentionally designed around two primary user-facing functions:
 
-All remaining routines are internal computational helpers.
+* `mv_random()` — unified random generation for matrix-variate models;
+* `mv_fit()` — unified ECM-based estimation interface.
+
+Most remaining routines are internal computational utilities that support
+these high-level interfaces.
 
 ---
 
@@ -15,13 +21,13 @@ All remaining routines are internal computational helpers.
 
 Many modern datasets are naturally observed as matrices rather than vectors. Examples include:
 
-- multivariate longitudinal measurements;
-- spatio-temporal panels;
-- environmental monitoring grids;
-- repeated image-like measurements;
-- financial panels observed across assets and time.
+* multivariate longitudinal measurements;
+* spatio-temporal panels;
+* environmental monitoring grids;
+* repeated image-like measurements;
+* financial panels observed across assets and time.
 
-`MVCens` provides practical tools for generating and fitting structured probabilistic models in these settings.
+`MVCens` provides practical tools for simulating and fitting structured probabilistic models in these settings.
 
 ---
 
@@ -39,44 +45,59 @@ library(MVCens)
 
 ## Main Functions
 
-## `mv_random()`
+The package revolves around a small set of high-level functions that provide
+a unified interface for simulation, estimation, and theoretical summaries of
+matrix-variate models.
+
+| Category | Functions | Purpose |
+|----------|-----------|---------|
+| Simulation | `mv_random()` | Generate random matrix-valued observations. |
+| Estimation | `mv_fit()` | Fit matrix-variate models by maximum likelihood using ECM algorithms. |
+| Densities | `dmvsn()`, `dmvst()`, `dmvrsn()` | Evaluate probability density functions. |
+| Log-likelihoods | `loglik_mvn()`, `loglik_mvnc()`, `loglik_mvsn()`, `loglik_mvsnc()`, `loglik_mvst()`, `loglik_mvrsn()` | Evaluate model log-likelihoods directly. |
+| MVRSN summaries | `mvrsn_mean()`, `mvrsn_covariances()` | Compute theoretical MVRSN moments. |
+
+### `mv_random()`
 
 Generates matrix-valued random observations from the implemented models.
 
-### Available Models
+#### Available Models
 
-| Model | Description |
-|------|-------------|
-| `"MVSN"` | Matrix-Variate Skew-Normal |
-| `"MVNC"` | Censored Matrix-Variate Normal |
-| `"MVSNC"` | Censored Matrix-Variate Skew-Normal |
-| `"MVST"` | Matrix-Variate Skew-t |
+| Model     | Description                            |
+| --------- | -------------------------------------- |
+| `"MVN"`   | Matrix-Variate Normal                  |
+| `"MVSN"`  | Matrix-Variate Skew-Normal             |
+| `"MVNC"`  | Censored Matrix-Variate Normal         |
+| `"MVSNC"` | Censored Matrix-Variate Skew-Normal    |
+| `"MVST"`  | Matrix-Variate Skew-t                  |
 | `"MVNIG"` | Matrix-Variate Normal-Inverse Gaussian |
-| `"MVVG"` | Matrix-Variate Variance-Gamma |
+| `"MVVG"`  | Matrix-Variate Variance-Gamma          |
+| `"MVRSN"` | Matrix-Variate Row Skew-Normal         |
 
-### Incomplete-data Mechanism (`Ind`)
+#### Incomplete-data Mechanism (`Ind`)
 
-| Value | Meaning |
-|------|---------|
-| `1` | Interval censoring |
-| `2` | Missing values encoded as `(-Inf, Inf)` |
-| `3` | Mixture of censoring and missingness |
+| Value | Meaning                                 |
+| ----- | --------------------------------------- |
+| `1`   | Interval censoring                      |
+| `2`   | Missing values encoded as `(-Inf, Inf)` |
+| `3`   | Mixture of censoring and missingness    |
 
 ---
 
-## `mv_fit()`
+### `mv_fit()`
 
 Fits matrix-variate models using ECM-type algorithms.
 
-### Supported Models
+#### Supported Models
 
-| Model | Description |
-|------|-------------|
-| `"MVN"` | Matrix-Variate Normal |
-| `"MVNC"` | Censored Matrix-Variate Normal |
-| `"MVSN"` | Matrix-Variate Skew-Normal |
+| Model     | Description                         |
+| --------- | ----------------------------------- |
+| `"MVN"`   | Matrix-Variate Normal               |
+| `"MVNC"`  | Censored Matrix-Variate Normal      |
+| `"MVSN"`  | Matrix-Variate Skew-Normal          |
 | `"MVSNC"` | Censored Matrix-Variate Skew-Normal |
-| `"MVST"` | Matrix-Variate Skew-t |
+| `"MVST"`  | Matrix-Variate Skew-t               |
+| `"MVRSN"` | Matrix-Variate Row Skew-Normal      |
 
 Returned objects may contain parameter estimates, reconstructed censored values, log-likelihood, BIC, convergence diagnostics, and iteration counts.
 
@@ -112,13 +133,23 @@ V <- matrix(c(1.30, 0.25, 0.10,
 
 ---
 
+The following examples illustrate the basic workflow for simulating and
+fitting the supported matrix-variate models.
+
 ## Random Generation Examples
+
+### Matrix-Variate Normal
+
+```r
+x_mvn <- mv_random("MVN", n = 50, M = M, U = U, V = V)
+dim(x_mvn$X)
+```
 
 ### Matrix-Variate Skew-Normal
 
 ```r
 x_mvsn <- mv_random("MVSN", n = 50, M = M, A = A, U = U, V = V)
-dim(x_mvsn)
+dim(x_mvsn$X)
 ```
 
 ### Censored Matrix-Variate Normal
@@ -129,20 +160,42 @@ x_mvnc <- mv_random("MVNC", n = 50, cens = 0.15, Ind = 1,
 names(x_mvnc)
 ```
 
+### Censored Matrix-Variate Skew-Normal
+
+```r
+x_mvsnc <- mv_random("MVSNC", n = 50, cens = 0.15, Ind = 1,
+                     M = M, A = A, U = U, V = V)
+names(x_mvsnc)
+```
+
 ### Matrix-Variate Skew-t
 
 ```r
 x_mvst <- mv_random("MVST", n = 50, M = M, A = A, U = U, V = V, nu = 6)
-dim(x_mvst)
+dim(x_mvst$X)
 ```
 
 ### Matrix-Variate Normal-Inverse Gaussian
 
 ```r
-x_mvnig <- mv_random("MVNIG", n = 50, cens = 0.10, Ind = 3,
-                     M = M, A = A, U = U, V = V,
+x_mvnig <- mv_random("MVNIG", n = 50, M = M, A = A, U = U, V = V,
                      gamma_tilde = 2.5)
 names(x_mvnig)
+```
+
+### Matrix-Variate Variance-Gamma
+
+```r
+x_mvvg <- mv_random("MVVG", n = 50, M = M, A = A, U = U, V = V,
+                    rate = 1.25)
+names(x_mvvg)
+```
+
+### Matrix-Variate Row Skew-Normal
+
+```r
+x_mvrsn <- mv_random("MVRSN", n = 50, M = M, A = A, U = U, V = V)
+names(x_mvrsn)
 ```
 
 ---
@@ -152,8 +205,15 @@ names(x_mvnig)
 ### Matrix-Variate Normal
 
 ```r
-fit_mvn <- mv_fit("MVN", samples = x_mvsn)
+fit_mvn <- mv_fit("MVN", samples = x_mvn$X)
 names(fit_mvn)
+```
+
+### Matrix-Variate Skew-Normal
+
+```r
+fit_mvsn <- mv_fit("MVSN", samples = x_mvsn$X)
+names(fit_mvsn)
 ```
 
 ### Censored Matrix-Variate Normal
@@ -166,14 +226,187 @@ fit_mvnc <- mv_fit("MVNC",
 names(fit_mvnc)
 ```
 
+### Censored Matrix-Variate Skew-Normal
+
+```r
+fit_mvsnc <- mv_fit("MVSNC",
+                    samples = x_mvsnc$X.cens,
+                    cc = x_mvsnc$cc,
+                    LS = x_mvsnc$LS)
+names(fit_mvsnc)
+```
+
 ### Matrix-Variate Skew-t
 
 ```r
 fit_mvst <- mv_fit("MVST",
-                   samples = x_mvst,
+                   samples = x_mvst$X,
                    nu = 4,
                    get.nu = TRUE)
 names(fit_mvst)
+```
+
+### Matrix-Variate Row Skew-Normal
+
+```r
+fit_mvrsn <- mv_fit("MVRSN",
+                    samples = x_mvrsn$X)
+names(fit_mvrsn)
+```
+
+---
+
+## Density Evaluation
+
+The package also exports density functions that can be used independently of
+`mv_random()` and `mv_fit()`.
+
+### Multivariate Skew-Normal
+
+```r
+dmvsn(
+  y = as.vector(x_mvsn$X[, , 1]),
+  mu = as.vector(M),
+  Sigma = kronecker(V, U),
+  lambda = as.vector(A)
+)
+```
+
+### Multivariate Skew-t
+
+```r
+dmvst(
+  y = as.vector(x_mvst$X[, , 1]),
+  mu = as.vector(M),
+  Sigma = kronecker(V, U),
+  lambda = as.vector(A),
+  nu = 6
+)
+```
+
+### Matrix-Variate Row Skew-Normal
+
+```r
+dmvrsn(
+  X = x_mvrsn$X[, , 1],
+  M = M,
+  A = A,
+  Sigma = U,
+  Psi = V
+)
+```
+
+---
+
+## Log-Likelihood Evaluation
+
+Observed-data log-likelihoods can also be evaluated directly without fitting
+a model.
+
+### Matrix-Variate Normal
+
+```r
+loglik_mvn(
+  samples = x_mvn$X,
+  M = M,
+  Sigma = U,
+  Psi = V
+)
+```
+
+### Matrix-Variate Skew-Normal
+
+```r
+loglik_mvsn(
+  dados = x_mvsn$X,
+  muM = M,
+  AM = A,
+  SigmaM = U,
+  PsiM = V
+)
+```
+
+### Censored Matrix-Variate Normal
+
+```r
+loglik_mvnc(
+  cc = x_mvnc$cc,
+  LS = x_mvnc$LS,
+  samples = x_mvnc$X.cens,
+  M = M,
+  Sigma = U,
+  Psi = V
+)
+```
+
+### Censored Matrix-Variate Skew-Normal
+
+```r
+loglik_mvsnc(
+  cc = x_mvsnc$cc,
+  LS = x_mvsnc$LS,
+  dados = x_mvsnc$X.cens,
+  muM = M,
+  SigmaM = U,
+  PsiM = V,
+  lambdaM = A
+)
+```
+
+### Matrix-Variate Skew-t
+
+```r
+loglik_mvst(
+  nu = 6,
+  dados = x_mvst$X,
+  muM = M,
+  AM = A,
+  SigmaM = U,
+  PsiM = V
+)
+```
+
+### Matrix-Variate Row Skew-Normal
+
+```r
+loglik_mvrsn(
+  X_array = x_mvrsn$X,
+  M = M,
+  A = A,
+  Sigma = U,
+  Psi = V
+)
+```
+
+---
+
+## Additional MVRSN Utilities
+
+The package also provides exported utility functions for the Matrix-Variate
+Row Skew-Normal (MVRSN) distribution. These functions compute theoretical
+moment summaries implied by the model.
+
+### Theoretical Mean
+
+```r
+mvrsn_mean(
+  M = M,
+  A = A
+)
+```
+
+### Theoretical Covariance Summaries
+
+```r
+covs <- mvrsn_covariances(
+  M = M,
+  A = A,
+  Sigma = U,
+  Psi = V
+)
+
+covs$row
+covs$column
 ```
 
 ---
@@ -185,6 +418,24 @@ After installation:
 ```r
 ?mv_random
 ?mv_fit
+
+## Density functions
+?dmvsn
+?dmvst
+?dmvrsn
+
+## Log-likelihood functions
+?loglik_mvn
+?loglik_mvnc
+?loglik_mvsn
+?loglik_mvsnc
+?loglik_mvst
+?loglik_mvrsn
+
+## MVRSN utilities
+?mvrsn_mean
+?mvrsn_covariances
+
 help(package = "MVCens")
 ```
 
@@ -194,19 +445,15 @@ help(package = "MVCens")
 
 `MVCens` is particularly useful for:
 
-- simulation studies with matrix-valued data;
-- censored or partially observed matrix data;
-- skewed dependence structures;
-- heavy-tailed matrix observations;
-- financial return panels;
-- environmental monitoring data;
-- longitudinal multivariate systems.
+* simulation studies with matrix-valued data;
+* censored or partially observed matrix data;
+* skewed dependence structures;
+* heavy-tailed matrix observations;
+* financial return panels;
+* environmental monitoring data;
+* longitudinal multivariate systems.
 
 ---
-
-## License
-
-This package is distributed under the license provided in the repository.
 
 ## 📊 Quarterly Dow-Jones dividends and divisor, 1920-1934
 
@@ -219,7 +466,7 @@ or skew-normal models.
 
 Because each observation is naturally stored as a matrix rather than as a
 simple vector, `dj_data` provides a convenient example for testing functions
-related to matrix-valued simulation and estimation
+related to matrix-valued simulation and estimation.
 
 In particular, the dataset can be used to demonstrate how
 repeated matrix observations over time may be incorporated into the modeling
@@ -249,4 +496,38 @@ dj_data <- list(
   `1933` = matrix(c(13.34, 15.46, 12.94, 15.46, 12.74, 15.71, 12.49, 15.71), ncol=2, byrow=TRUE),
   `1934` = matrix(c(13.90, 15.71, 13.95, 15.71, 14.10, 15.74, 15.30, 15.74), ncol=2, byrow=TRUE)
 )
-```r
+```
+
+## References
+
+The methodology implemented in **MVCens** builds upon the following references.
+
+### Matrix-Variate Distributions
+
+- Gupta, A. K., & Nagar, D. K. (2000). *Matrix Variate Distributions*. Chapman & Hall/CRC.
+
+### Matrix-Variate Skew-Normal Models
+
+- Azzalini, A., & Capitanio, A. (2014). *The Skew-Normal and Related Families*. Cambridge University Press.
+
+- Chen, J. T., & Gupta, A. K. (2005). On matrix variate skew-normal distributions. *Journal of Multivariate Analysis*, **94**(1), 114–126.
+
+- Harrar, S. W., & Gupta, A. K. (2008). On matrix variate skew-normal distributions. *Journal of Multivariate Analysis*, **99**(9), 1900–1914.
+
+- Ning, W., & Gupta, A. K. (2023). Matrix variate extended skew-normal distribution. *Journal of Multivariate Analysis*, **194**, 105122.
+
+- Correia, A. P., Diniz, C. A. R., & Lachos, V. H. (2026). Matrix-Variate Skew Normal Distribution: Properties and Estimation. *Statistical Analysis and Data Mining: The ASA Data Science Journal*, **19**(3), e70090. https://doi.org/10.1002/sam.70090
+
+### Heavy-Tailed Matrix-Variate Models
+
+- Gallaugher, M. P. B., & McNicholas, P. D. (2018). Three skewed matrix variate distributions. *Pattern Recognition*, **80**, 83–93.
+
+### ECM Algorithm
+
+- Meng, X.-L., & Rubin, D. B. (1993). Maximum likelihood estimation via the ECM algorithm: A general framework. *Biometrika*, **80**(2), 267–278.
+
+---
+
+## License
+
+This package is distributed under the license provided in the repository.

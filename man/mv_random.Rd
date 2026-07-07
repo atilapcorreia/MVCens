@@ -27,9 +27,9 @@ mv_random(
 
 \item{A}{Numeric matrix. Skewness/drift matrix.}
 
-\item{U}{Square numeric matrix. Row covariance matrix.}
+\item{U}{Row scale/covariance matrix, passed as Sigma in the MVRSN model.}
 
-\item{V}{Square numeric matrix. Column covariance matrix.}
+\item{V}{Column scale/covariance matrix, passed as Psi in the MVRSN model.}
 
 \item{cens}{Numeric scalar. Censoring proportion.}
 
@@ -48,6 +48,7 @@ The output returned by the selected random generator.
 Unified interface for matrix-variate random generators
 }
 \examples{
+
 M <- matrix(c(1.0, 1.5, 2.0,
               0.8, 1.2, 1.7,
               1.4, 1.9, 2.3),
@@ -69,6 +70,7 @@ V <- matrix(c(1.30, 0.25, 0.10,
             nrow = 3, ncol = 3, byrow = TRUE)
 
 ## Matrix-variate skew-normal
+
 x_mvsn <- mv_random(
   model = "MVSN",
   n = 50,
@@ -79,6 +81,7 @@ x_mvsn <- mv_random(
 )
 
 ## Censored matrix-variate normal
+
 x_mvnc <- mv_random(
   model = "MVNC",
   n = 50,
@@ -90,6 +93,7 @@ x_mvnc <- mv_random(
 )
 
 ## Censored matrix-variate skew-normal
+
 x_mvsnc <- mv_random(
   model = "MVSNC",
   n = 50,
@@ -98,10 +102,11 @@ x_mvsnc <- mv_random(
   M = M,
   U = U,
   V = V,
-  A = A,
+  A = A
 )
 
 ## Matrix-variate skew-t
+
 x_mvst <- mv_random(
   model = "MVST",
   n = 50,
@@ -113,6 +118,7 @@ x_mvst <- mv_random(
 )
 
 ## Matrix-variate normal-inverse Gaussian
+
 x_mvnig <- mv_random(
   model = "MVNIG",
   n = 50,
@@ -126,6 +132,7 @@ x_mvnig <- mv_random(
 )
 
 ## Matrix-variate variance-gamma
+
 x_mvvg <- mv_random(
   model = "MVVG",
   n = 50,
@@ -136,10 +143,15 @@ x_mvvg <- mv_random(
   rate = 1.25
 )
 
-dim(x_mvsn)
-names(x_mvnc)
-names(x_mvsnc)
-dim(x_mvst)
-names(x_mvnig)
-dim(x_mvvg)
+## Matrix-variate row skew normal
+
+x_mvrsn <- mv_random(
+  model = "MVRSN",
+  n = 50,
+  M = M,
+  A = A,
+  U = U,
+  V = V
+)
+
 }

@@ -9,12 +9,20 @@ mv_fit(
   samples = NULL,
   cc = NULL,
   LS = NULL,
-  precision = 1e-07,
-  MaxIter = 100,
+  precision = 1e-06,
+  MaxIter = 200,
   epsilon = 1e-08,
   nu = 4,
   get.nu = TRUE,
-  nu_bounds = c(0.05, 150)
+  nu_bounds = c(0.05, 150),
+  normalize_Psi = TRUE,
+  M_init = NULL,
+  A_init = NULL,
+  Sigma_init = NULL,
+  Psi_init = NULL,
+  verbose = TRUE,
+  eig_floor = 1e-08,
+  monotone_tol = 1e-07
 )
 }
 \arguments{
@@ -26,6 +34,7 @@ Supported options are:
 \item \code{"MVSN"}  - Matrix Variate Skew-Normal
 \item \code{"MVSNC"} - Censored Matrix Variate Skew-Normal
 \item \code{"MVST"}  - Matrix Variate Skew-t
+\item \code{"MVRSN"} - Matrix Variate Row Skew-Normal
 }}
 
 \item{samples}{Numeric 3D array containing the observed matrix-valued data.
@@ -40,16 +49,43 @@ For censored models, this should contain the observed values or lower limits.}
 
 \item{MaxIter}{Positive integer. Maximum number of ECM iterations.}
 
-\item{epsilon}{Positive scalar used for numerical stabilization in models that
-require it.}
+\item{epsilon}{Positive scalar used for numerical stabilization in models
+that require it.}
 
-\item{nu}{Positive scalar. Initial degrees of freedom for the \code{"MVST"} model.}
+\item{nu}{Positive scalar. Initial degrees of freedom for the
+\code{"MVST"} model.}
 
 \item{get.nu}{Logical. If \code{TRUE}, updates \code{nu} during ECM for the
 \code{"MVST"} model.}
 
-\item{nu_bounds}{Numeric vector of length two. Search interval for \code{nu}
-in the \code{"MVST"} model.}
+\item{nu_bounds}{Numeric vector of length two. Search interval for
+\code{nu} in the \code{"MVST"} model.}
+
+\item{normalize_Psi}{Logical. If \code{TRUE}, normalizes the estimated column
+covariance matrix so that its determinant equals one in the
+\code{"MVRSN"} model.}
+
+\item{M_init}{Optional initial value for the location matrix in the
+\code{"MVRSN"} model.}
+
+\item{A_init}{Optional initial value for the skewness matrix in the
+\code{"MVRSN"} model.}
+
+\item{Sigma_init}{Optional initial value for the row covariance matrix in the
+\code{"MVRSN"} model.}
+
+\item{Psi_init}{Optional initial value for the column covariance matrix in
+the \code{"MVRSN"} model.}
+
+\item{verbose}{Logical. If \code{TRUE}, prints iteration progress during fitting
+of the \code{"MVRSN"} model.}
+
+\item{eig_floor}{Positive scalar specifying the minimum eigenvalue used when
+projecting covariance matrices onto the positive definite cone in the
+\code{"MVRSN"} model.}
+
+\item{monotone_tol}{Positive scalar specifying the tolerance used to assess
+monotonicity of the observed-data log-likelihood in the \code{"MVRSN"} model.}
 }
 \value{
 The fitted object returned by the selected ECM routine.
@@ -59,9 +95,114 @@ Fits one of the matrix-variate models implemented in the package using the
 corresponding non-internal ECM estimation function.
 }
 \examples{
-# out <- mv_fit(
-#   model = "MVN",
-#   samples = samples,
-#   MaxIter = 20
-# )
+
+\dontrun{
+p <- 3
+q <- 4
+n <- 100
+
+M <- matrix(0, p, q)
+A <- matrix(1, p, q)
+U <- diag(p)
+V <- diag(q)
+
+## Matrix-variate Normal
+sim_mvn <- mv_random(
+  model = "MVSN",
+  n = n,
+  M = M,
+  A = matrix(0, p, q),
+  U = U,
+  V = V
+)
+
+fit_mvn <- mv_fit(
+  model = "MVN",
+  samples = sim_mvn$X
+)
+
+## Matrix-variate Skew-Normal
+sim_mvsn <- mv_random(
+  model = "MVSN",
+  n = n,
+  M = M,
+  A = A,
+  U = U,
+  V = V
+)
+
+fit_mvsn <- mv_fit(
+  model = "MVSN",
+  samples = sim_mvsn$X
+)
+
+## Matrix-variate Skew-t
+sim_mvst <- mv_random(
+  model = "MVST",
+  n = n,
+  M = M,
+  A = A,
+  U = U,
+  V = V,
+  nu = 5
+)
+
+fit_mvst <- mv_fit(
+  model = "MVST",
+  samples = sim_mvst$X,
+  nu = 5
+)
+
+## Matrix-variate Row Skew-Normal
+sim_mvrsn <- mv_random(
+  model = "MVRSN",
+  n = n,
+  M = M,
+  A = A,
+  U = U,
+  V = V
+)
+
+fit_mvrsn <- mv_fit(
+  model = "MVRSN",
+  samples = sim_mvrsn$X
+)
+
+## Matrix-variate Censored Normal
+cens <- 0.15
+
+sim_mvnc <- mv_random(
+  model = "MVNC",
+  n = n,
+  cens = cens,
+  M = M,
+  U = U,
+  V = V
+)
+
+fit_mvnc <- mv_fit(
+  model = "MVNC",
+  samples = sim_mvnc$X.cens,
+  cc = sim_mvnc$cc,
+  LS = sim_mvnc$LS
+)
+
+## Matrix-variate Censored Skew-Normal
+sim_mvsnc <- mv_random(
+  model = "MVSNC",
+  n = n,
+  cens = cens,
+  M = M,
+  A = A,
+  U = U,
+  V = V
+)
+
+fit_mvsnc <- mv_fit(
+  model = "MVSNC",
+  samples = sim_mvsnc$X.cens,
+  cc = sim_mvsnc$cc,
+  LS = sim_mvsnc$LS
+)
+}
 }

@@ -1,9 +1,18 @@
 Package: MVCens
-Title: What the Package Does (One Line, Title Case)
+Title: Matrix-Variate Models for Censored, Skewed, and Heavy-Tailed Data
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+    person("Atila", "Correia", , "atilapc1989@gmail.com", role = c("aut", "cre"))
+Description:  Provides simulation and likelihood-based estimation procedures
+    for matrix-variate statistical models with emphasis on censored,
+    incomplete, skewed, and heavy-tailed data. The package implements
+    unified interfaces for random generation and ECM-based maximum
+    likelihood estimation of matrix-variate normal, skew-normal,
+    row skew-normal, skew-t, normal-inverse Gaussian, variance-gamma,
+    and censored matrix-variate models. It is intended for applications
+    involving matrix-valued observations such as longitudinal studies,
+    spatio-temporal data, environmental monitoring, financial panels,
+    and other structured multivariate datasets.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -16,4 +25,6 @@ Imports:
     MomTrunc,
     mvtnorm,
     statmod,
-    tlrmvnmvt
+    tlrmvnmvt,
+    tmvtnorm
+

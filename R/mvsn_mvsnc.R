@@ -9,7 +9,7 @@
 #' @return A matrix containing the square root of `A`.
 #'
 #' @keywords internal
-
+#' @noRd
 sqrtm <- function(A, epsilon = 1e-8) {
 
   if (length(A) == 1L) {
@@ -46,18 +46,18 @@ sqrtm <- function(A, epsilon = 1e-8) {
 
   }
 
-  #' Inverse Mills ratio
-  #'
-  #' Computes the inverse Mills ratio for a normal random variable.
-  #'
-  #' @param x Finite numeric scalar.
-  #' @param mu Mean of the normal distribution. Default is `0`.
-  #' @param sd Standard deviation of the normal distribution. Default is `1`.
-  #'
-  #' @return A positive numeric scalar.
-  #'
-  #' @keywords internal
-
+#' Inverse Mills ratio
+#'
+#' Computes the inverse Mills ratio for a normal random variable.
+#'
+#' @param x Finite numeric scalar.
+#' @param mu Mean of the normal distribution. Default is `0`.
+#' @param sd Standard deviation of the normal distribution. Default is `1`.
+#'
+#' @return A positive numeric scalar.
+#'
+#' @keywords internal
+#' @noRd
 invmills <- function(x, mu = 0, sd = 1) {
 
   if (!is.numeric(x) || length(x) != 1L || !is.finite(x)) {
@@ -99,7 +99,7 @@ invmills <- function(x, mu = 0, sd = 1) {
 #' @return A numeric probability or its base-2 logarithm.
 #'
 #' @keywords internal
-
+#' @noRd
 prob_opt <- function(lower = rep(-Inf, ncol(sigma)),
                      upper = rep(Inf, ncol(sigma)),
                      mean = rep(0, ncol(sigma)),
@@ -165,9 +165,8 @@ prob_opt <- function(lower = rep(-Inf, ncol(sigma)),
 #'
 #' @return A numeric density value.
 #'
-#' @keywords internal
-
-dmvSN <- function(y, mu, Sigma, lambda, epsilon = 1e-8) {
+#' @export
+dmvsn <- function(y, mu, Sigma, lambda, epsilon = 1e-8) {
 
   y      <- c(y)
   mu     <- c(mu)
@@ -214,9 +213,8 @@ dmvSN <- function(y, mu, Sigma, lambda, epsilon = 1e-8) {
 #'
 #' @return Numeric scalar containing the total log-likelihood.
 #'
-#' @keywords internal
-
-loglikelSN <- function(dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
+#' @export
+loglik_mvsn <- function(dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
 
   if (length(dim(dados)) != 3L) {
     stop("'dados' must be a 3D array.")
@@ -230,7 +228,7 @@ loglikelSN <- function(dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
   suma1 <- 0
 
   for (j in seq_len(n)) {
-    dens <- dmvSN(
+    dens <- dmvsn(
       y = vec_col(dados[, , j]),
       mu = mu_vec,
       Sigma = Sigma_full,
@@ -267,9 +265,8 @@ loglikelSN <- function(dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
 #'
 #' @return Numeric scalar containing the observed-data log-likelihood.
 #'
-#' @keywords internal
-
-logLikCensSN <- function(cc, LS, dados, muM, SigmaM, PsiM, lambdaM, epsilon = 1e-8) {
+#' @export
+loglik_mvsnc <- function(cc, LS, dados, muM, SigmaM, PsiM, lambdaM, epsilon = 1e-8) {
   if (length(dim(dados)) != 3L) {
     stop("'dados' must be a 3D array.")
   }
@@ -418,7 +415,6 @@ logLikCensSN <- function(cc, LS, dados, muM, SigmaM, PsiM, lambdaM, epsilon = 1e
 #' }
 #'
 #' @keywords internal
-
 mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
   if (length(dim(dados)) != 3L) {
     stop("'dados' deve ser um array 3D com dimensoes p x q x n.")
@@ -539,7 +535,7 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
     Sigma <- make_posdef(suma3 / (q * n), epsilon = epsilon)
     Vari <- kronecker(Psi, Sigma)
 
-    loglik[count] <- loglikelSN(dados, mu, A, Sigma, Psi, epsilon = epsilon)
+    loglik[count] <- loglik_mvsn(dados, mu, A, Sigma, Psi, epsilon = epsilon)
     criterio <- compute_ecm_criterion(loglik, count)
   }
 
@@ -595,7 +591,6 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
 #' }
 #'
 #' @keywords internal
-
 mvsnc_ecm <- function(dados, cc, LS, precision = 1e-7, MaxIter = 50, epsilon = 1e-8) {
 
   validate_mvnc_input(dados, cc, LS)
@@ -880,7 +875,7 @@ mvsnc_ecm <- function(dados, cc, LS, precision = 1e-7, MaxIter = 50, epsilon = 1
 
     mu <- vec_col(muM)
 
-    loglik[count] <- logLikCensSN(cc, LS, dados, muM, SigmaM, PsiM, DeltaM, epsilon = epsilon)
+    loglik[count] <- loglik_mvsnc(cc, LS, dados, muM, SigmaM, PsiM, DeltaM, epsilon = epsilon)
     criterio <- compute_ecm_criterion(loglik, count)
   }
 

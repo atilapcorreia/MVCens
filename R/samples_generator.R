@@ -13,7 +13,6 @@
 #' @return Invisibly returns `TRUE` if all inputs are valid.
 #'
 #' @keywords internal
-
 validate_matrix_generator_inputs <- function(n, M, U, V, A = NULL, require_A = FALSE) {
   if (!is.numeric(n) || length(n) != 1L || !is.finite(n) || n <= 0 || n != as.integer(n)) {
     stop("'n' must be a positive integer.")
@@ -69,7 +68,6 @@ validate_matrix_generator_inputs <- function(n, M, U, V, A = NULL, require_A = F
 #' `X[, , i]` is one simulated matrix observation.
 #'
 #' @keywords internal
-
 rmvsn <- function(n, M, A, U, V) {
 
   validate_matrix_generator_inputs(n = n, M = M, U = U, V = V, A = A, require_A = TRUE)
@@ -120,7 +118,6 @@ rmvsn <- function(n, M, A, U, V) {
 #' }
 #'
 #' @keywords internal
-
 rmatrix_censored <- function(n, cens, Ind = 1, M, U, V, A = NULL, dist = c("SN", "Normal")) {
 
   dist <- match.arg(dist)
@@ -217,7 +214,6 @@ rmatrix_censored <- function(n, cens, Ind = 1, M, U, V, A = NULL, dist = c("SN",
   list(X.cens = X.cens, cc = cc, LS = LS)
 }
 
-
 #' Generate matrix-variate skew-t samples
 #'
 #' Generates random matrices from a matrix-variate skew-t-type distribution using
@@ -241,7 +237,6 @@ rmatrix_censored <- function(n, cens, Ind = 1, M, U, V, A = NULL, dist = c("SN",
 #' @return A numeric array of dimension \eqn{p \times q \times n}.
 #'
 #' @keywords internal
-
 rmvst <- function(n, M, A, U, V, nu) {
   validate_matrix_generator_inputs(
     n = n,
@@ -313,7 +308,6 @@ rmvst <- function(n, M, A, U, V, nu) {
 #' }
 #'
 #' @keywords internal
-
 rmvnig <- function(n, cens, Ind, M, U, V, A, gamma_tilde = 2) {
   # ------------------------------------------------------------
   # Generate n samples from MVNIG_{p x q}(M, A, U, V, gamma_tilde)
@@ -476,7 +470,6 @@ rmvnig <- function(n, cens, Ind, M, U, V, A, gamma_tilde = 2) {
 #' }
 #'
 #' @keywords internal
-
 rmvvg <- function(n, M, A, U, V, rate = 1) {
   if (!is.numeric(n) ||
       length(n) != 1L ||
@@ -545,6 +538,53 @@ rmvvg <- function(n, M, A, U, V, rate = 1) {
   }
 
   X_array
+}
+
+#' Generate random matrices from the MVRSN distribution
+#'
+#' This function implements the stochastic representation directly:
+#' X_i = M + diag(w_i) A + V_i, where w_i has independent standard half-normal
+#' entries and V_i is matrix-normal with covariance Psi %x% Sigma after
+#' vectorization. It is the reference generator used by the Monte Carlo audit.
+#'
+#' @param n Number of matrices to generate.
+#' @param M Location matrix of dimension p x q.
+#' @param A Skewness matrix of dimension p x q.
+#' @param Sigma Positive definite row covariance matrix.
+#' @param Psi Positive definite column covariance matrix.
+#' @param seed Optional random seed.
+#' @param return_latent If TRUE, return the latent half-normal vectors too.
+#' @return If `return_latent = FALSE`, an array p x q x n. Otherwise, a list
+#'   with `X` and `W`.
+#'
+#' @keywords internal
+rmvrsn <- function(n, M, A, Sigma, Psi, seed = NULL, return_latent = FALSE) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+  if (length(n) != 1L || n <= 0L) {
+    stop("n must be a positive integer.", call. = FALSE)
+  }
+
+  pars <- mvrsn_validate_parameters(M = M, A = A, Sigma = Sigma, Psi = Psi)
+  L_sigma <- mvrsn_chol_lower(pars$Sigma, "Sigma")
+  R_psi <- chol(pars$Psi)
+
+  X <- array(NA_real_, dim = c(pars$p, pars$q, n))
+  W <- matrix(NA_real_, nrow = n, ncol = pars$p)
+
+  for (i in seq_len(n)) {
+    w <- abs(stats::rnorm(pars$p))
+    Z <- matrix(stats::rnorm(pars$p * pars$q), nrow = pars$p, ncol = pars$q)
+    V <- L_sigma %*% Z %*% R_psi
+    X[, , i] <- pars$M + diag(w, pars$p, pars$p) %*% pars$A + V
+    W[i, ] <- w
+  }
+
+  if (return_latent) {
+    return(list(X = X, W = W))
+  }
+  X
 }
 
 

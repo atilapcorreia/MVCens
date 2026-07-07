@@ -4,8 +4,8 @@
 #' @param n Positive integer. Number of observations.
 #' @param M Numeric matrix. Location matrix.
 #' @param A Numeric matrix. Skewness/drift matrix.
-#' @param U Square numeric matrix. Row covariance matrix.
-#' @param V Square numeric matrix. Column covariance matrix.
+#' @param U Row scale/covariance matrix, passed as Sigma in the MVRSN model.
+#' @param V Column scale/covariance matrix, passed as Psi in the MVRSN model.
 #' @param cens Numeric scalar. Censoring proportion.
 #' @param Ind Integer. Type of incomplete-data mechanism.
 #' @param nu Positive scalar. Degrees of freedom for the MVST model.
@@ -17,6 +17,7 @@
 #' @export
 #'
 #' @examples
+#'
 #' M <- matrix(c(1.0, 1.5, 2.0,
 #'               0.8, 1.2, 1.7,
 #'               1.4, 1.9, 2.3),
@@ -38,6 +39,7 @@
 #'             nrow = 3, ncol = 3, byrow = TRUE)
 #'
 #' ## Matrix-variate skew-normal
+#'
 #' x_mvsn <- mv_random(
 #'   model = "MVSN",
 #'   n = 50,
@@ -48,6 +50,7 @@
 #' )
 #'
 #' ## Censored matrix-variate normal
+#'
 #' x_mvnc <- mv_random(
 #'   model = "MVNC",
 #'   n = 50,
@@ -59,6 +62,7 @@
 #' )
 #'
 #' ## Censored matrix-variate skew-normal
+#'
 #' x_mvsnc <- mv_random(
 #'   model = "MVSNC",
 #'   n = 50,
@@ -67,10 +71,11 @@
 #'   M = M,
 #'   U = U,
 #'   V = V,
-#'   A = A,
+#'   A = A
 #' )
 #'
 #' ## Matrix-variate skew-t
+#'
 #' x_mvst <- mv_random(
 #'   model = "MVST",
 #'   n = 50,
@@ -82,6 +87,7 @@
 #' )
 #'
 #' ## Matrix-variate normal-inverse Gaussian
+#'
 #' x_mvnig <- mv_random(
 #'   model = "MVNIG",
 #'   n = 50,
@@ -95,6 +101,7 @@
 #' )
 #'
 #' ## Matrix-variate variance-gamma
+#'
 #' x_mvvg <- mv_random(
 #'   model = "MVVG",
 #'   n = 50,
@@ -105,12 +112,17 @@
 #'   rate = 1.25
 #' )
 #'
-#' dim(x_mvsn)
-#' names(x_mvnc)
-#' names(x_mvsnc)
-#' dim(x_mvst)
-#' names(x_mvnig)
-#' dim(x_mvvg)
+#' ## Matrix-variate row skew normal
+#'
+#' x_mvrsn <- mv_random(
+#'   model = "MVRSN",
+#'   n = 50,
+#'   M = M,
+#'   A = A,
+#'   U = U,
+#'   V = V
+#' )
+#'
 
 mv_random <- function(model,
                       n = NULL,
@@ -130,7 +142,7 @@ mv_random <- function(model,
 
   model <- toupper(model)
 
-  valid_models <- c("MVSN", "MVNC", "MVSNC", "MVST", "MVNIG", "MVVG")
+  valid_models <- c("MVSN", "MVNC", "MVSNC", "MVST", "MVNIG", "MVVG", "MVRSN")
 
   if (!(model %in% valid_models)) {
     stop(sprintf(
@@ -160,7 +172,7 @@ mv_random <- function(model,
         M = M,
         U = U,
         V = V,
-        A = A,
+        A = NULL,
         dist = "Normal"
       )
     )
@@ -220,6 +232,24 @@ mv_random <- function(model,
     return(rmvvg(n = n, M = M, A = A, U = U, V = V, rate = rate))
   }
 
+  if (model == "MVRSN") {
+    if (is.null(n) || is.null(M) || is.null(A) || is.null(U) || is.null(V)) {
+      stop("For model = 'MVRSN', you must provide 'n', 'M', 'A', 'U', and 'V'.")
+    }
+
+    return(
+      rmvrsn(
+        n = n,
+        M = M,
+        A = A,
+        Sigma = U,
+        Psi = V,
+        seed = NULL,
+        return_latent = FALSE
+      )
+    )
+  }
+
   stop("Unexpected 'model' value.")
 }
 
@@ -236,6 +266,7 @@ mv_random <- function(model,
 #'   \item \code{"MVSN"}  - Matrix Variate Skew-Normal
 #'   \item \code{"MVSNC"} - Censored Matrix Variate Skew-Normal
 #'   \item \code{"MVST"}  - Matrix Variate Skew-t
+#'   \item \code{"MVRSN"} - Matrix Variate Row Skew-Normal
 #' }
 #' @param samples Numeric 3D array containing the observed matrix-valued data.
 #' For censored models, this should contain the observed values or lower limits.
@@ -244,13 +275,32 @@ mv_random <- function(model,
 #' @param LS Optional 3D array of upper limits for censored models.
 #' @param precision Positive scalar. Convergence tolerance.
 #' @param MaxIter Positive integer. Maximum number of ECM iterations.
-#' @param epsilon Positive scalar used for numerical stabilization in models that
-#' require it.
-#' @param nu Positive scalar. Initial degrees of freedom for the \code{"MVST"} model.
+#' @param epsilon Positive scalar used for numerical stabilization in models
+#' that require it.
+#' @param nu Positive scalar. Initial degrees of freedom for the
+#' \code{"MVST"} model.
 #' @param get.nu Logical. If `TRUE`, updates \code{nu} during ECM for the
 #' \code{"MVST"} model.
-#' @param nu_bounds Numeric vector of length two. Search interval for \code{nu}
-#' in the \code{"MVST"} model.
+#' @param nu_bounds Numeric vector of length two. Search interval for
+#' \code{nu} in the \code{"MVST"} model.
+#' @param normalize_Psi Logical. If `TRUE`, normalizes the estimated column
+#' covariance matrix so that its determinant equals one in the
+#' \code{"MVRSN"} model.
+#' @param M_init Optional initial value for the location matrix in the
+#' \code{"MVRSN"} model.
+#' @param A_init Optional initial value for the skewness matrix in the
+#' \code{"MVRSN"} model.
+#' @param Sigma_init Optional initial value for the row covariance matrix in the
+#' \code{"MVRSN"} model.
+#' @param Psi_init Optional initial value for the column covariance matrix in
+#' the \code{"MVRSN"} model.
+#' @param verbose Logical. If `TRUE`, prints iteration progress during fitting
+#' of the \code{"MVRSN"} model.
+#' @param eig_floor Positive scalar specifying the minimum eigenvalue used when
+#' projecting covariance matrices onto the positive definite cone in the
+#' \code{"MVRSN"} model.
+#' @param monotone_tol Positive scalar specifying the tolerance used to assess
+#' monotonicity of the observed-data log-likelihood in the \code{"MVRSN"} model.
 #'
 #' @return
 #' The fitted object returned by the selected ECM routine.
@@ -258,28 +308,142 @@ mv_random <- function(model,
 #' @export
 #'
 #' @examples
-#' # out <- mv_fit(
-#' #   model = "MVN",
-#' #   samples = samples,
-#' #   MaxIter = 20
-#' # )
+#'
+#' \dontrun{
+#' p <- 3
+#' q <- 4
+#' n <- 100
+#'
+#' M <- matrix(0, p, q)
+#' A <- matrix(1, p, q)
+#' U <- diag(p)
+#' V <- diag(q)
+#'
+#' ## Matrix-variate Normal
+#' sim_mvn <- mv_random(
+#'   model = "MVSN",
+#'   n = n,
+#'   M = M,
+#'   A = matrix(0, p, q),
+#'   U = U,
+#'   V = V
+#' )
+#'
+#' fit_mvn <- mv_fit(
+#'   model = "MVN",
+#'   samples = sim_mvn$X
+#' )
+#'
+#' ## Matrix-variate Skew-Normal
+#' sim_mvsn <- mv_random(
+#'   model = "MVSN",
+#'   n = n,
+#'   M = M,
+#'   A = A,
+#'   U = U,
+#'   V = V
+#' )
+#'
+#' fit_mvsn <- mv_fit(
+#'   model = "MVSN",
+#'   samples = sim_mvsn$X
+#' )
+#'
+#' ## Matrix-variate Skew-t
+#' sim_mvst <- mv_random(
+#'   model = "MVST",
+#'   n = n,
+#'   M = M,
+#'   A = A,
+#'   U = U,
+#'   V = V,
+#'   nu = 5
+#' )
+#'
+#' fit_mvst <- mv_fit(
+#'   model = "MVST",
+#'   samples = sim_mvst$X,
+#'   nu = 5
+#' )
+#'
+#' ## Matrix-variate Row Skew-Normal
+#' sim_mvrsn <- mv_random(
+#'   model = "MVRSN",
+#'   n = n,
+#'   M = M,
+#'   A = A,
+#'   U = U,
+#'   V = V
+#' )
+#'
+#' fit_mvrsn <- mv_fit(
+#'   model = "MVRSN",
+#'   samples = sim_mvrsn$X
+#' )
+#'
+#' ## Matrix-variate Censored Normal
+#' cens <- 0.15
+#'
+#' sim_mvnc <- mv_random(
+#'   model = "MVNC",
+#'   n = n,
+#'   cens = cens,
+#'   M = M,
+#'   U = U,
+#'   V = V
+#' )
+#'
+#' fit_mvnc <- mv_fit(
+#'   model = "MVNC",
+#'   samples = sim_mvnc$X.cens,
+#'   cc = sim_mvnc$cc,
+#'   LS = sim_mvnc$LS
+#' )
+#'
+#' ## Matrix-variate Censored Skew-Normal
+#' sim_mvsnc <- mv_random(
+#'   model = "MVSNC",
+#'   n = n,
+#'   cens = cens,
+#'   M = M,
+#'   A = A,
+#'   U = U,
+#'   V = V
+#' )
+#'
+#' fit_mvsnc <- mv_fit(
+#'   model = "MVSNC",
+#'   samples = sim_mvsnc$X.cens,
+#'   cc = sim_mvsnc$cc,
+#'   LS = sim_mvsnc$LS
+#' )
+#' }
+
 mv_fit <- function(model,
                    samples = NULL,
                    cc = NULL,
                    LS = NULL,
-                   precision = 1e-7,
-                   MaxIter = 100,
+                   precision = 1e-6,
+                   MaxIter = 200,
                    epsilon = 1e-8,
                    nu = 4,
                    get.nu = TRUE,
-                   nu_bounds = c(0.05, 150)) {
+                   nu_bounds = c(0.05, 150),
+                   normalize_Psi = TRUE,
+                   M_init = NULL,
+                   A_init = NULL,
+                   Sigma_init = NULL,
+                   Psi_init = NULL,
+                   verbose = TRUE,
+                   eig_floor = 1e-8,
+                   monotone_tol = 1e-7) {
 
   if (!is.character(model) || length(model) != 1L || is.na(model)) {
     stop("'model' must be a single character string.")
   }
 
   model <- toupper(model)
-  valid_models <- c("MVN", "MVNC", "MVSN", "MVSNC", "MVST")
+  valid_models <- c("MVN", "MVNC", "MVSN", "MVSNC", "MVST", "MVRSN")
 
   if (!(model %in% valid_models)) {
     stop(sprintf(
@@ -364,6 +528,28 @@ mv_fit <- function(model,
         get.nu = get.nu,
         epsilon = epsilon,
         nu_bounds = nu_bounds
+      )
+    )
+  }
+
+  if (model == "MVRSN") {
+    if (is.null(samples)) {
+      stop("For model = 'MVRSN', you must provide 'samples'.")
+    }
+
+    return(
+      mvrsn_ecm(
+        X = samples,
+        max_iter = MaxIter,
+        tol = precision,
+        normalize_Psi = TRUE,
+        M_init = NULL,
+        A_init = NULL,
+        Sigma_init = NULL,
+        Psi_init = NULL,
+        verbose = TRUE,
+        eig_floor = 1e-8,
+        monotone_tol = 1e-7
       )
     )
   }

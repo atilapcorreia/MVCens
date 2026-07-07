@@ -9,7 +9,6 @@
 #' @return A symmetric positive definite matrix.
 #'
 #' @keywords internal
-
 make_posdef <- function(X, epsilon = 1e-8) {
 
   X <- (X + t(X)) / 2
@@ -38,7 +37,6 @@ make_posdef <- function(X, epsilon = 1e-8) {
 #' @return A numeric vector containing the entries of `X` stacked by columns.
 #'
 #' @keywords internal
-
 vec_col <- function(X) {
 
   as.vector(matrixNormal::vec(X))
@@ -56,7 +54,6 @@ vec_col <- function(X) {
 #' @return The inverse of `A`.
 #'
 #' @keywords internal
-
 solve_sym_pd <- function(A, epsilon = 1e-8) {
 
   A <- make_posdef((A + t(A)) / 2, epsilon = epsilon)
@@ -77,7 +74,6 @@ solve_sym_pd <- function(A, epsilon = 1e-8) {
 #' @return A positive definite matrix with determinant approximately equal to one.
 #'
 #' @keywords internal
-
 normalize_cov_constraint <- function(A, epsilon = 1e-8) {
 
   A <- make_posdef((A + t(A)) / 2, epsilon = epsilon)
@@ -99,7 +95,6 @@ normalize_cov_constraint <- function(A, epsilon = 1e-8) {
 #' @return A nonnegative scalar convergence criterion.
 #'
 #' @keywords internal
-
 compute_ecm_criterion <- function(loglik, iter) {
 
   if (iter <= 1L) {
@@ -126,7 +121,6 @@ compute_ecm_criterion <- function(loglik, iter) {
 #' @return Invisibly returns `TRUE` if the input is valid.
 #'
 #' @keywords internal
-
 validate_mvn_input <- function(samples) {
 
   if (length(dim(samples)) != 3L) {
@@ -160,7 +154,6 @@ validate_mvn_input <- function(samples) {
 #' @return Invisibly returns `TRUE` if all inputs are valid.
 #'
 #' @keywords internal
-
 validate_mvnc_input <- function(samples, cc, LS) {
 
   validate_mvn_input(samples)
@@ -199,7 +192,6 @@ validate_mvnc_input <- function(samples, cc, LS) {
 #' @return A finite numeric scalar.
 #'
 #' @keywords internal
-
 get_observed_fill_value <- function(samples, cc = NULL) {
 
   observed <- if (is.null(cc)) samples else samples[cc == 0]
@@ -243,7 +235,6 @@ get_observed_fill_value <- function(samples, cc = NULL) {
 #' }
 #'
 #' @keywords internal
-
 get_truncated_moments <- function(y, cc1, LS1, mu1, Vari, epsilon = 1e-8) {
 
   miss <- which(cc1 == 1)
@@ -335,7 +326,6 @@ moment_to_omega <- function(tuy, tuyy, mu1, epsilon = 1e-8) {
 #' moments, predicted mean matrix, and covariance-type correction matrix.
 #'
 #' @keywords internal
-
 get_censored_sample_stats <- function(samples, cc, LS, mu, Vari, j, epsilon = 1e-8) {
 
   y1 <- vec_col(samples[, , j])
@@ -375,9 +365,8 @@ get_censored_sample_stats <- function(samples, cc, LS, mu, Vari, j, epsilon = 1e
 #'
 #' @return Numeric scalar containing the total log-likelihood.
 #'
-#' @keywords internal
-
-mvn_loglik <- function(samples, M, Sigma, Psi) {
+#' @export
+loglik_mvn <- function(samples, M, Sigma, Psi) {
 
   validate_mvn_input(samples)
 
@@ -417,9 +406,8 @@ mvn_loglik <- function(samples, M, Sigma, Psi) {
 #'
 #' @return Numeric scalar containing the censored-data log-likelihood.
 #'
-#' @keywords internal
-
-mvnc_loglik <- function(cc, LS, samples, M, Sigma, Psi, epsilon = 1e-8) {
+#' @export
+loglik_mvnc <- function(cc, LS, samples, M, Sigma, Psi, epsilon = 1e-8) {
 
   validate_mvnc_input(samples, cc, LS)
 
@@ -511,7 +499,6 @@ mvnc_loglik <- function(cc, LS, samples, M, Sigma, Psi, epsilon = 1e-8) {
 #' }
 #'
 #' @keywords internal
-
 somaL3 <- function(L1, Sigma, Psi, epsilon = 1e-8) {
 
   n <- ncol(L1)
@@ -568,7 +555,6 @@ somaL3 <- function(L1, Sigma, Psi, epsilon = 1e-8) {
 #' }
 #'
 #' @keywords internal
-
 mvnc_ecm <- function(samples, cc, LS, precision = 1e-7, MaxIter = 50) {
 
   validate_mvnc_input(samples, cc, LS)
@@ -649,7 +635,7 @@ mvnc_ecm <- function(samples, cc, LS, precision = 1e-7, MaxIter = 50) {
 
     Sigma <- make_posdef((suma3 / (q * n) + t(suma3 / (q * n))) / 2)
     Vari  <- kronecker(Psi, Sigma)
-    loglik[count] <- mvnc_loglik(cc, LS, samples, mu, Sigma, Psi)
+    loglik[count] <- loglik_mvnc(cc, LS, samples, mu, Sigma, Psi)
     criterio <- compute_ecm_criterion(loglik, count)
   }
 
@@ -703,7 +689,6 @@ mvnc_ecm <- function(samples, cc, LS, precision = 1e-7, MaxIter = 50) {
 #' }
 #'
 #' @keywords internal
-
 mvn_ecm <- function(samples, precision = 1e-7, MaxIter = 50) {
 
   validate_mvn_input(samples)
@@ -746,7 +731,7 @@ mvn_ecm <- function(samples, precision = 1e-7, MaxIter = 50) {
     }
 
     Sigma         <- make_posdef((suma3 / (q * n) + t(suma3 / (q * n))) / 2)
-    loglik[count] <- mvn_loglik(samples, mu, Sigma, Psi)
+    loglik[count] <- loglik_mvn(samples, mu, Sigma, Psi)
     criterio      <- compute_ecm_criterion(loglik, count)
 
   }
