@@ -152,20 +152,29 @@ prob_opt <- function(lower = rep(-Inf, ncol(sigma)),
                   uselog2 = uselog2)[[1]]
 }
 
-#' Multivariate skew-normal density
+#' Density of the multivariate skew-normal distribution
 #'
-#' Evaluates the density of a multivariate skew-normal distribution using a
-#' latent-variable parameterization.
+#' Evaluates the probability density of a multivariate skew-normal distribution
+#' at a given observation, with numerical regularization of the covariance
+#' matrices controlled by \code{epsilon}.
 #'
-#' @param y Numeric vector of observed values.
-#' @param mu Numeric location vector.
-#' @param Sigma Positive definite covariance matrix.
-#' @param lambda Numeric skewness vector.
-#' @param epsilon Numerical tolerance for covariance regularization.
+#' @param y Numeric vector containing the values at which the density is
+#'   evaluated.
+#' @param mu Numeric vector specifying the location parameter. It must have the
+#'   same length as \code{y}.
+#' @param Sigma Numeric positive definite covariance matrix associated with the
+#'   symmetric component of the distribution. Its number of rows and columns
+#'   must equal the length of \code{mu}.
+#' @param lambda Numeric vector specifying the direction and magnitude of
+#'   skewness. It must have the same length as \code{mu}.
+#' @param epsilon Positive numeric scalar specifying the tolerance used for
+#'   covariance-matrix regularization and numerical positive-definiteness
+#'   checks. The default is \code{1e-8}.
 #'
-#' @return A numeric density value.
+#' @return A numeric scalar containing the density evaluated at \code{y}.
 #'
 #' @export
+
 dmvsn <- function(y, mu, Sigma, lambda, epsilon = 1e-8) {
 
   y      <- c(y)
@@ -388,21 +397,13 @@ loglik_mvsnc <- function(cc, LS, dados, muM, SigmaM, PsiM, lambdaM, epsilon = 1e
 #' ECM estimation for the matrix-variate skew-normal model
 #'
 #' Fits a complete-data matrix-variate skew-normal model by an ECM algorithm.
-#' The model is based on the stochastic representation
-#'
-#' \deqn{
-#' X_i = \mu + W_i A + V_i,
-#' }
-#'
-#' where \eqn{W_i} follows a half-normal latent distribution and
-#' \eqn{V_i \sim MN_{p \times q}(0, \Sigma, \Psi)}.
 #'
 #' @param dados Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param precision Positive scalar. Convergence tolerance.
 #' @param MaxIter Positive integer. Maximum number of ECM iterations.
 #' @param epsilon Numerical tolerance for covariance regularization.
 #'
-#' @return An object of class `"EM.MatrixSN"` containing:
+#' @return An object of class `"MVSN"` containing:
 #' \describe{
 #'   \item{mu}{Estimated location matrix.}
 #'   \item{A}{Estimated skewness matrix.}
@@ -559,7 +560,7 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
     converged = (criterio <= precision)
   )
 
-  class(obj.out) <- "EM.MatrixSN"
+  class(obj.out) <- "MVSN.ECM"
   obj.out
 }
 
@@ -591,7 +592,7 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
 #' }
 #'
 #' @keywords internal
-mvsnc_ecm <- function(dados, cc, LS, precision = 1e-7, MaxIter = 50, epsilon = 1e-8) {
+mvsnc_ecm <- function(dados, cc, LS, precision = 1e-6, MaxIter = 50, epsilon = 1e-8) {
 
   validate_mvnc_input(dados, cc, LS)
 

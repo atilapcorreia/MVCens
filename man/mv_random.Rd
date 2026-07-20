@@ -2,7 +2,7 @@
 % Please edit documentation in R/global_function.R
 \name{mv_random}
 \alias{mv_random}
-\title{Unified interface for matrix-variate random generators}
+\title{Unified interface for matrix-variate random generation}
 \usage{
 mv_random(
   model,
@@ -11,147 +11,147 @@ mv_random(
   A = NULL,
   U = NULL,
   V = NULL,
+  lambda = NULL,
+  return_latent = FALSE,
   cens = NULL,
-  Ind = 1,
+  Ind = NULL,
   nu = NULL,
   gamma_tilde = 2,
   rate = 1
 )
 }
 \arguments{
-\item{model}{Character string specifying the model.}
+\item{model}{Character string specifying the model from which observations
+are generated. Available options are \code{"MVSN"}, \code{"MVST"}, \code{"MVNIG"}, \code{"MVVG"},
+\code{"MVRSN"}, \code{"MVREN"}, \code{"MVNC"}, and \code{"MVSNC"}.}
 
-\item{n}{Positive integer. Number of observations.}
+\item{n}{Positive integer specifying the number of matrix-valued
+observations to be generated.}
 
-\item{M}{Numeric matrix. Location matrix.}
+\item{M}{Numeric matrix specifying the location parameter.}
 
-\item{A}{Numeric matrix. Skewness/drift matrix.}
+\item{A}{Optional numeric matrix specifying the skewness, drift, or
+latent-effect parameter. It is required for models containing an
+asymmetric or mean-shift component, including \code{"MVSN"}, \code{"MVST"},
+\code{"MVNIG"}, \code{"MVVG"}, \code{"MVRSN"}, \code{"MVREN"}, and \code{"MVSNC"}.}
 
-\item{U}{Row scale/covariance matrix, passed as Sigma in the MVRSN model.}
+\item{U}{Symmetric positive-definite numeric matrix specifying the row
+covariance or scale matrix.}
 
-\item{V}{Column scale/covariance matrix, passed as Psi in the MVRSN model.}
+\item{V}{Symmetric positive-definite numeric matrix specifying the column
+covariance or scale matrix.}
 
-\item{cens}{Numeric scalar. Censoring proportion.}
+\item{lambda}{Optional positive numeric vector containing the
+row-specific exponential rate parameters for \code{model = "MVREN"}.
+Its length must equal \code{nrow(M)}. When \code{NULL}, a vector of ones is used.}
 
-\item{Ind}{Integer. Type of incomplete-data mechanism.}
+\item{return_latent}{Logical scalar indicating whether latent variables
+should be included in the returned object for models whose generators
+support this option. The default is \code{FALSE}.}
 
-\item{nu}{Positive scalar. Degrees of freedom for the MVST model.}
+\item{cens}{Optional numeric scalar specifying the desired censoring
+proportion for censored models. It must lie between zero and one and is
+used only for \code{model = "MVNC"} and \code{model = "MVSNC"}.}
 
-\item{gamma_tilde}{Positive scalar. Shape parameter for the MVNIG model.}
+\item{Ind}{Optional integer specifying the censoring or incomplete-data
+mechanism used for \code{model = "MVNC"} and \code{model = "MVSNC"}.
+The admissible values and their interpretation are determined by the
+corresponding censored-data generator.}
 
-\item{rate}{Positive scalar. Exponential rate for the MVVG model.}
+\item{nu}{Positive numeric scalar specifying the degrees-of-freedom
+parameter for \code{model = "MVST"}.}
+
+\item{gamma_tilde}{Positive numeric scalar specifying the shape parameter
+of the mixing distribution for \code{model = "MVNIG"}. The default is \code{2}.}
+
+\item{rate}{Positive numeric scalar specifying the exponential rate
+parameter for \code{model = "MVVG"}. The default is \code{1}.}
 }
 \value{
-The output returned by the selected random generator.
+A model-dependent list returned by the corresponding random
+generator. For complete-data models, the returned object contains at
+least:
+
+\describe{
+\item{\code{X}}{
+A numeric array with dimensions \eqn{p \times q \times n}
+containing the generated matrix-valued observations.
+}
+}
+
+For censored models, the returned object additionally contains:
+
+\describe{
+\item{\code{X.cens}}{
+A numeric array containing the censored or incomplete observations.
+}
+\item{\code{cc}}{
+A censoring-indicator array having the same dimensions as \code{X}.
+}
+\item{\code{LS}}{
+An array containing the censoring limits.
+}
+}
+
+When \code{return_latent = TRUE} and the selected generator supports latent
+output, additional model-specific latent variables are included in the
+returned list.
 }
 \description{
-Unified interface for matrix-variate random generators
+Generates random matrix-valued observations from one of the
+matrix-variate distributions implemented in the package. The function
+dispatches the request to the corresponding model-specific random
+generator and returns its output in a unified format.
 }
-\examples{
+\details{
+The required arguments depend on the selected model:
 
-M <- matrix(c(1.0, 1.5, 2.0,
-              0.8, 1.2, 1.7,
-              1.4, 1.9, 2.3),
-            nrow = 3, ncol = 3, byrow = TRUE)
+\describe{
+\item{\code{"MVSN"}}{
+Requires \code{n}, \code{M}, \code{A}, \code{U}, and \code{V}.
+}
+\item{\code{"MVST"}}{
+Requires \code{n}, \code{M}, \code{A}, \code{U}, \code{V}, and \code{nu}.
+}
+\item{\code{"MVNIG"}}{
+Requires \code{n}, \code{M}, \code{A}, \code{U}, and \code{V}. The argument
+\code{gamma_tilde} controls the corresponding mixing distribution.
+}
+\item{\code{"MVVG"}}{
+Requires \code{n}, \code{M}, \code{A}, \code{U}, and \code{V}. The argument \code{rate}
+controls the corresponding mixing distribution.
+}
+\item{\code{"MVRSN"}}{
+Requires \code{n}, \code{M}, \code{A}, \code{U}, and \code{V}.
+}
+\item{\code{"MVREN"}}{
+Requires \code{n}, \code{M}, \code{A}, \code{U}, and \code{V}. The optional argument
+\code{lambda} specifies the row-specific exponential rates.
+}
+\item{\code{"MVNC"}}{
+Requires \code{n}, \code{M}, \code{U}, \code{V}, \code{cens}, and \code{Ind}.
+}
+\item{\code{"MVSNC"}}{
+Requires \code{n}, \code{M}, \code{A}, \code{U}, \code{V}, \code{cens}, and \code{Ind}.
+}
+}
 
-A <- matrix(c( 0.25, -0.10,  0.35,
-              -0.20,  0.30,  0.15,
-               0.40,  0.05, -0.25),
-            nrow = 3, ncol = 3, byrow = TRUE)
+The generated observations are stored in a three-dimensional numeric
+array whose dimensions are
+\eqn{p \times q \times n}, where \eqn{p = \mathrm{nrow}(M)} and
+\eqn{q = \mathrm{ncol}(M)}.
 
-U <- matrix(c(1.50, 0.35, 0.20,
-              0.35, 1.20, 0.30,
-              0.20, 0.30, 1.10),
-            nrow = 3, ncol = 3, byrow = TRUE)
+For censored models, the function additionally returns the censored
+observations, censoring indicators, and censoring limits required by
+\code{\link[=mv_fit]{mv_fit()}}. The realized censoring proportion may differ slightly from
+the value supplied through \code{cens}, depending on the censoring mechanism
+implemented by the underlying generator.
 
-V <- matrix(c(1.30, 0.25, 0.10,
-              0.25, 1.10, 0.20,
-              0.10, 0.20, 1.40),
-            nrow = 3, ncol = 3, byrow = TRUE)
-
-## Matrix-variate skew-normal
-
-x_mvsn <- mv_random(
-  model = "MVSN",
-  n = 50,
-  M = M,
-  A = A,
-  U = U,
-  V = V
-)
-
-## Censored matrix-variate normal
-
-x_mvnc <- mv_random(
-  model = "MVNC",
-  n = 50,
-  cens = 0.15,
-  Ind = 1,
-  M = M,
-  U = U,
-  V = V
-)
-
-## Censored matrix-variate skew-normal
-
-x_mvsnc <- mv_random(
-  model = "MVSNC",
-  n = 50,
-  cens = 0.15,
-  Ind = 3,
-  M = M,
-  U = U,
-  V = V,
-  A = A
-)
-
-## Matrix-variate skew-t
-
-x_mvst <- mv_random(
-  model = "MVST",
-  n = 50,
-  M = M,
-  A = A,
-  U = U,
-  V = V,
-  nu = 6
-)
-
-## Matrix-variate normal-inverse Gaussian
-
-x_mvnig <- mv_random(
-  model = "MVNIG",
-  n = 50,
-  cens = 0.10,
-  Ind = 3,
-  M = M,
-  U = U,
-  V = V,
-  A = A,
-  gamma_tilde = 2.5
-)
-
-## Matrix-variate variance-gamma
-
-x_mvvg <- mv_random(
-  model = "MVVG",
-  n = 50,
-  M = M,
-  A = A,
-  U = U,
-  V = V,
-  rate = 1.25
-)
-
-## Matrix-variate row skew normal
-
-x_mvrsn <- mv_random(
-  model = "MVRSN",
-  n = 50,
-  M = M,
-  A = A,
-  U = U,
-  V = V
-)
-
+When \code{return_latent = TRUE}, latent quantities are included only when the
+selected model-specific generator supports their return. The names and
+dimensions of these additional components depend on the selected model.
+}
+\seealso{
+\code{\link[=mv_fit]{mv_fit()}}, \code{\link[=mvren_mean]{mvren_mean()}}, \code{\link[=mvren_covariances]{mvren_covariances()}},
+\code{\link[=mvrsn_mean]{mvrsn_mean()}}, \code{\link[=mvrsn_covariances]{mvrsn_covariances()}}
 }

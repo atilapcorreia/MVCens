@@ -2,25 +2,33 @@
 % Please edit documentation in R/mvsn_mvsnc.R
 \name{dmvsn}
 \alias{dmvsn}
-\title{Multivariate skew-normal density}
+\title{Density of the multivariate skew-normal distribution}
 \usage{
 dmvsn(y, mu, Sigma, lambda, epsilon = 1e-08)
 }
 \arguments{
-\item{y}{Numeric vector of observed values.}
+\item{y}{Numeric vector containing the values at which the density is
+evaluated.}
 
-\item{mu}{Numeric location vector.}
+\item{mu}{Numeric vector specifying the location parameter. It must have the
+same length as \code{y}.}
 
-\item{Sigma}{Positive definite covariance matrix.}
+\item{Sigma}{Numeric positive definite covariance matrix associated with the
+symmetric component of the distribution. Its number of rows and columns
+must equal the length of \code{mu}.}
 
-\item{lambda}{Numeric skewness vector.}
+\item{lambda}{Numeric vector specifying the direction and magnitude of
+skewness. It must have the same length as \code{mu}.}
 
-\item{epsilon}{Numerical tolerance for covariance regularization.}
+\item{epsilon}{Positive numeric scalar specifying the tolerance used for
+covariance-matrix regularization and numerical positive-definiteness
+checks. The default is \code{1e-8}.}
 }
 \value{
-A numeric density value.
+A numeric scalar containing the density evaluated at \code{y}.
 }
 \description{
-Evaluates the density of a multivariate skew-normal distribution using a
-latent-variable parameterization.
+Evaluates the probability density of a multivariate skew-normal distribution
+at a given observation, with numerical regularization of the covariance
+matrices controlled by \code{epsilon}.
 }

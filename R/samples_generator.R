@@ -587,5 +587,74 @@ rmvrsn <- function(n, M, A, Sigma, Psi, seed = NULL, return_latent = FALSE) {
   X
 }
 
+#' Generate random matrices from the MVREN distribution
+#'
+#' This function implements the stochastic representation directly:
+#' \deqn{
+#' X_i = M + \operatorname{diag}(w_i)A + V_i,
+#' }
+#' where the components of \eqn{w_i} are mutually independent exponential
+#' random variables with rates given by `lambda`, and \eqn{V_i} follows a
+#' matrix-normal distribution with covariance `Psi \%x\% Sigma` after
+#' vectorization. It is the reference generator used by the Monte Carlo audit.
+#'
+#' @param n Number of matrices to generate.
+#' @param M Location matrix of dimension `p` by `q`.
+#' @param A Row-specific latent-effect matrix of dimension `p` by `q`.
+#' @param Sigma Positive-definite row covariance matrix of dimension `p` by
+#'   `p`.
+#' @param Psi Positive-definite column covariance matrix of dimension `q` by
+#'   `q`.
+#' @param lambda Optional positive rate vector of length `p`. When `NULL`, a
+#'   vector of ones is used.
+#' @param return_latent If `TRUE`, return the generated latent exponential
+#'   vectors together with the observations.
+#'
+#' @return If `return_latent = FALSE`, an array of dimension `p` by `q` by `n`.
+#'   Otherwise, a list containing `X` and `W`, where `W` is an `n` by `p`
+#'   matrix of latent exponential variables.
+#'
+#' @keywords internal
+rmvren <- function(n,
+                   M,
+                   A,
+                   Sigma,
+                   Psi,
+                   lambda = NULL,
+                   return_latent = FALSE) {
+  if (length(n) != 1L || !is.finite(n) || n <= 0 || n != as.integer(n)) {
+    stop("n must be a positive integer.", call. = FALSE)
+  }
+  n <- as.integer(n)
+
+  pars <- mvren_validate_parameters(
+    M = M,
+    A = A,
+    Sigma = Sigma,
+    Psi = Psi,
+    lambda = lambda
+  )
+
+  L_Sigma <- mvren_chol_lower(pars$Sigma, "Sigma")
+  L_Psi <- mvren_chol_lower(pars$Psi, "Psi")
+
+  X <- array(0, dim = c(pars$p, pars$q, n))
+  W <- matrix(0, nrow = n, ncol = pars$p)
+
+  for (i in seq_len(n)) {
+    w <- stats::rexp(pars$p, rate = pars$lambda)
+    Z <- matrix(stats::rnorm(pars$p * pars$q), nrow = pars$p, ncol = pars$q)
+    V <- L_Sigma %*% Z %*% t(L_Psi)
+
+    W[i, ] <- w
+    X[, , i] <- pars$M + diag(w, pars$p, pars$p) %*% pars$A + V
+  }
+
+  if (isTRUE(return_latent)) {
+    return(list(X = X, W = W))
+  }
+  X
+}
+
 
 

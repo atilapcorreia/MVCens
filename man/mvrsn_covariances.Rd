@@ -20,7 +20,6 @@ validation, but it does not enter the covariance formula.}
 A list with \code{row} and \code{column} covariance summaries.
 }
 \description{
-These are the matrix covariance summaries derived in the theory:
-Crow = (1 - 2/pi) diag(diag(A A')) + tr(Psi) Sigma
-Ccolumn = (1 - 2/pi) A' A + tr(Sigma) Psi.
+Computes the theoretical row and column covariance summaries of the
+matrix-variate row skew-normal distribution.
 }

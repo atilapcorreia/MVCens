@@ -2,50 +2,32 @@
 % Please edit documentation in R/mvrsn.R
 \name{dmvrsn}
 \alias{dmvrsn}
-\title{Evaluates the closed-form density from Proposition 1 of the theory. With
-\eqn{Y = X - M}, the implementation computes
-\deqn{
-c = \mathrm{tr}\{\Sigma^{-1} Y \Psi^{-1} Y^\top\},
-}
-\deqn{
-b = \mathrm{diag}\{A \Psi^{-1} Y^\top \Sigma^{-1}\},
-}
-\deqn{
-Q = I_p + \Sigma^{-1} \circ (A \Psi^{-1} A^\top),
-}
-where \eqn{\circ} denotes the Hadamard product. The normal orthant
-probability is evaluated with \pkg{mvtnorm}.}
+\title{Density of the matrix-variate row skew-normal distribution}
 \usage{
 dmvrsn(X, M, A, Sigma, Psi, log = FALSE)
 }
 \arguments{
-\item{X}{Matrix of dimension p x q.}
+\item{X}{Matrix of dimension \eqn{p \times q}.}
 
-\item{M}{Location matrix of dimension p x q.}
+\item{M}{Location matrix of dimension \eqn{p \times q}.}
 
-\item{A}{Skewness matrix of dimension p x q.}
+\item{A}{Skewness matrix of dimension \eqn{p \times q}.}
 
-\item{Sigma}{Positive definite row covariance matrix of dimension p x p.}
+\item{Sigma}{Positive definite row covariance matrix of dimension
+\eqn{p \times p}.}
 
-\item{Psi}{Positive definite column covariance matrix of dimension q x q.}
+\item{Psi}{Positive definite column covariance matrix of dimension
+\eqn{q \times q}.}
 
-\item{log}{Return log-density when TRUE.}
+\item{log}{Logical. If \code{TRUE}, returns the log-density.}
 }
 \value{
-Numeric density or log-density.
+A numeric scalar containing the density evaluated at \code{X}.
+When \code{log = TRUE}, the corresponding log-density is returned.
 }
 \description{
-Evaluates the closed-form density from Proposition 1 of the theory. With
-\eqn{Y = X - M}, the implementation computes
-\deqn{
-c = \mathrm{tr}\{\Sigma^{-1} Y \Psi^{-1} Y^\top\},
-}
-\deqn{
-b = \mathrm{diag}\{A \Psi^{-1} Y^\top \Sigma^{-1}\},
-}
-\deqn{
-Q = I_p + \Sigma^{-1} \circ (A \Psi^{-1} A^\top),
-}
-where \eqn{\circ} denotes the Hadamard product. The normal orthant
-probability is evaluated with \pkg{mvtnorm}.
+Evaluates the closed-form probability density or log-density of a
+matrix-variate row skew-normal distribution at a given matrix-valued
+observation, using the specified location, skewness, row covariance, and
+column covariance parameters.
 }

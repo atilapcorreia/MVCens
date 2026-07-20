@@ -4,7 +4,7 @@
 \alias{mvn_ecm}
 \title{ECM estimation for the matrix-variate normal model}
 \usage{
-mvn_ecm(samples, precision = 1e-07, MaxIter = 50)
+mvn_ecm(samples, precision = 1e-06, MaxIter = 50)
 }
 \arguments{
 \item{samples}{Numeric array with dimensions \eqn{p \times q \times n}.}
@@ -26,15 +26,6 @@ An object of class \code{"MVN.ECM"} containing:
 }
 }
 \description{
-Fits a complete-data matrix-variate normal model by an ECM algorithm. The model
-assumes
-}
-\details{
-\deqn{
-X_i \sim MN_{p \times q}(\mu, \Sigma, \Psi),
-}
-
-where \code{mu} is the location matrix, \code{Sigma} is the row covariance matrix, and
-\code{Psi} is the column covariance matrix.
+Fits a complete-data matrix-variate normal model by an ECM algorithm.
 }
 \keyword{internal}

@@ -4,7 +4,7 @@
 \alias{mvsnc_ecm}
 \title{ECM estimation for the censored matrix-variate skew-normal model}
 \usage{
-mvsnc_ecm(dados, cc, LS, precision = 1e-07, MaxIter = 50, epsilon = 1e-08)
+mvsnc_ecm(dados, cc, LS, precision = 1e-06, MaxIter = 50, epsilon = 1e-08)
 }
 \arguments{
 \item{dados}{Numeric array with dimensions \eqn{p \times q \times n}.}

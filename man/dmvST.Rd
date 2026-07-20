@@ -2,7 +2,7 @@
 % Please edit documentation in R/mvst.R
 \name{dmvst}
 \alias{dmvst}
-\title{Multivariate skew-t density}
+\title{Density of the multivariate skew-\eqn{t} distribution}
 \usage{
 dmvst(y, mu, Sigma, lambda, nu, epsilon = 1e-08, log = FALSE)
 }
@@ -25,6 +25,7 @@ dmvst(y, mu, Sigma, lambda, nu, epsilon = 1e-08, log = FALSE)
 A numeric density value, or log-density if \code{log = TRUE}.
 }
 \description{
-Evaluates the density of a multivariate skew-t distribution using a
-latent-variable parameterization.
+Evaluates the probability density or log-density of a multivariate
+skew-\eqn{t} distribution at a given observation, with covariance-matrix
+regularization controlled by \code{epsilon}.
 }

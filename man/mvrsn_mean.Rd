@@ -15,6 +15,5 @@ mvrsn_mean(M, A)
 The theoretical mean matrix.
 }
 \description{
-For standard half-normal latent variables, E(W_i) = sqrt(2 / pi). Therefore
-E(X) = M + sqrt(2 / pi) A.
+Mean matrix of the MVRSN distribution
 }

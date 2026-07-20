@@ -1,128 +1,126 @@
-#' Unified interface for matrix-variate random generators
+#' Unified interface for matrix-variate random generation
 #'
-#' @param model Character string specifying the model.
-#' @param n Positive integer. Number of observations.
-#' @param M Numeric matrix. Location matrix.
-#' @param A Numeric matrix. Skewness/drift matrix.
-#' @param U Row scale/covariance matrix, passed as Sigma in the MVRSN model.
-#' @param V Column scale/covariance matrix, passed as Psi in the MVRSN model.
-#' @param cens Numeric scalar. Censoring proportion.
-#' @param Ind Integer. Type of incomplete-data mechanism.
-#' @param nu Positive scalar. Degrees of freedom for the MVST model.
-#' @param gamma_tilde Positive scalar. Shape parameter for the MVNIG model.
-#' @param rate Positive scalar. Exponential rate for the MVVG model.
+#' Generates random matrix-valued observations from one of the
+#' matrix-variate distributions implemented in the package. The function
+#' dispatches the request to the corresponding model-specific random
+#' generator and returns its output in a unified format.
 #'
-#' @return The output returned by the selected random generator.
+#' @param model Character string specifying the model from which observations
+#'   are generated. Available options are `"MVSN"`, `"MVST"`, `"MVNIG"`, `"MVVG"`,
+#'   `"MVRSN"`, `"MVREN"`, `"MVNC"`, and `"MVSNC"`.
+#' @param n Positive integer specifying the number of matrix-valued
+#'   observations to be generated.
+#' @param M Numeric matrix specifying the location parameter.
+#' @param A Optional numeric matrix specifying the skewness, drift, or
+#'   latent-effect parameter. It is required for models containing an
+#'   asymmetric or mean-shift component, including `"MVSN"`, `"MVST"`,
+#'   `"MVNIG"`, `"MVVG"`, `"MVRSN"`, `"MVREN"`, and `"MVSNC"`.
+#' @param U Symmetric positive-definite numeric matrix specifying the row
+#'   covariance or scale matrix.
+#' @param V Symmetric positive-definite numeric matrix specifying the column
+#'   covariance or scale matrix.
+#' @param lambda Optional positive numeric vector containing the
+#'   row-specific exponential rate parameters for `model = "MVREN"`.
+#'   Its length must equal `nrow(M)`. When `NULL`, a vector of ones is used.
+#' @param return_latent Logical scalar indicating whether latent variables
+#'   should be included in the returned object for models whose generators
+#'   support this option. The default is `FALSE`.
+#' @param cens Optional numeric scalar specifying the desired censoring
+#'   proportion for censored models. It must lie between zero and one and is
+#'   used only for `model = "MVNC"` and `model = "MVSNC"`.
+#' @param Ind Optional integer specifying the censoring or incomplete-data
+#'   mechanism used for `model = "MVNC"` and `model = "MVSNC"`.
+#'   The admissible values and their interpretation are determined by the
+#'   corresponding censored-data generator.
+#' @param nu Positive numeric scalar specifying the degrees-of-freedom
+#'   parameter for `model = "MVST"`.
+#' @param gamma_tilde Positive numeric scalar specifying the shape parameter
+#'   of the mixing distribution for `model = "MVNIG"`. The default is `2`.
+#' @param rate Positive numeric scalar specifying the exponential rate
+#'   parameter for `model = "MVVG"`. The default is `1`.
+#'
+#' @details
+#' The required arguments depend on the selected model:
+#'
+#' \describe{
+#'   \item{`"MVSN"`}{
+#'     Requires `n`, `M`, `A`, `U`, and `V`.
+#'   }
+#'   \item{`"MVST"`}{
+#'     Requires `n`, `M`, `A`, `U`, `V`, and `nu`.
+#'   }
+#'   \item{`"MVNIG"`}{
+#'     Requires `n`, `M`, `A`, `U`, and `V`. The argument
+#'     `gamma_tilde` controls the corresponding mixing distribution.
+#'   }
+#'   \item{`"MVVG"`}{
+#'     Requires `n`, `M`, `A`, `U`, and `V`. The argument `rate`
+#'     controls the corresponding mixing distribution.
+#'   }
+#'   \item{`"MVRSN"`}{
+#'     Requires `n`, `M`, `A`, `U`, and `V`.
+#'   }
+#'   \item{`"MVREN"`}{
+#'     Requires `n`, `M`, `A`, `U`, and `V`. The optional argument
+#'     `lambda` specifies the row-specific exponential rates.
+#'   }
+#'   \item{`"MVNC"`}{
+#'     Requires `n`, `M`, `U`, `V`, `cens`, and `Ind`.
+#'   }
+#'   \item{`"MVSNC"`}{
+#'     Requires `n`, `M`, `A`, `U`, `V`, `cens`, and `Ind`.
+#'   }
+#' }
+#'
+#' The generated observations are stored in a three-dimensional numeric
+#' array whose dimensions are
+#' \eqn{p \times q \times n}, where \eqn{p = \mathrm{nrow}(M)} and
+#' \eqn{q = \mathrm{ncol}(M)}.
+#'
+#' For censored models, the function additionally returns the censored
+#' observations, censoring indicators, and censoring limits required by
+#' [mv_fit()]. The realized censoring proportion may differ slightly from
+#' the value supplied through `cens`, depending on the censoring mechanism
+#' implemented by the underlying generator.
+#'
+#' When `return_latent = TRUE`, latent quantities are included only when the
+#' selected model-specific generator supports their return. The names and
+#' dimensions of these additional components depend on the selected model.
+#'
+#' @return A model-dependent list returned by the corresponding random
+#'   generator. For complete-data models, the returned object contains at
+#'   least:
+#'
+#'   \describe{
+#'     \item{`X`}{
+#'       A numeric array with dimensions \eqn{p \times q \times n}
+#'       containing the generated matrix-valued observations.
+#'     }
+#'   }
+#'
+#'   For censored models, the returned object additionally contains:
+#'
+#'   \describe{
+#'     \item{`X.cens`}{
+#'       A numeric array containing the censored or incomplete observations.
+#'     }
+#'     \item{`cc`}{
+#'       A censoring-indicator array having the same dimensions as `X`.
+#'     }
+#'     \item{`LS`}{
+#'       An array containing the censoring limits.
+#'     }
+#'   }
+#'
+#'   When `return_latent = TRUE` and the selected generator supports latent
+#'   output, additional model-specific latent variables are included in the
+#'   returned list.
+#'
+#' @seealso
+#' [mv_fit()], [mvren_mean()], [mvren_covariances()],
+#' [mvrsn_mean()], [mvrsn_covariances()]
 #'
 #' @export
-#'
-#' @examples
-#'
-#' M <- matrix(c(1.0, 1.5, 2.0,
-#'               0.8, 1.2, 1.7,
-#'               1.4, 1.9, 2.3),
-#'             nrow = 3, ncol = 3, byrow = TRUE)
-#'
-#' A <- matrix(c( 0.25, -0.10,  0.35,
-#'               -0.20,  0.30,  0.15,
-#'                0.40,  0.05, -0.25),
-#'             nrow = 3, ncol = 3, byrow = TRUE)
-#'
-#' U <- matrix(c(1.50, 0.35, 0.20,
-#'               0.35, 1.20, 0.30,
-#'               0.20, 0.30, 1.10),
-#'             nrow = 3, ncol = 3, byrow = TRUE)
-#'
-#' V <- matrix(c(1.30, 0.25, 0.10,
-#'               0.25, 1.10, 0.20,
-#'               0.10, 0.20, 1.40),
-#'             nrow = 3, ncol = 3, byrow = TRUE)
-#'
-#' ## Matrix-variate skew-normal
-#'
-#' x_mvsn <- mv_random(
-#'   model = "MVSN",
-#'   n = 50,
-#'   M = M,
-#'   A = A,
-#'   U = U,
-#'   V = V
-#' )
-#'
-#' ## Censored matrix-variate normal
-#'
-#' x_mvnc <- mv_random(
-#'   model = "MVNC",
-#'   n = 50,
-#'   cens = 0.15,
-#'   Ind = 1,
-#'   M = M,
-#'   U = U,
-#'   V = V
-#' )
-#'
-#' ## Censored matrix-variate skew-normal
-#'
-#' x_mvsnc <- mv_random(
-#'   model = "MVSNC",
-#'   n = 50,
-#'   cens = 0.15,
-#'   Ind = 3,
-#'   M = M,
-#'   U = U,
-#'   V = V,
-#'   A = A
-#' )
-#'
-#' ## Matrix-variate skew-t
-#'
-#' x_mvst <- mv_random(
-#'   model = "MVST",
-#'   n = 50,
-#'   M = M,
-#'   A = A,
-#'   U = U,
-#'   V = V,
-#'   nu = 6
-#' )
-#'
-#' ## Matrix-variate normal-inverse Gaussian
-#'
-#' x_mvnig <- mv_random(
-#'   model = "MVNIG",
-#'   n = 50,
-#'   cens = 0.10,
-#'   Ind = 3,
-#'   M = M,
-#'   U = U,
-#'   V = V,
-#'   A = A,
-#'   gamma_tilde = 2.5
-#' )
-#'
-#' ## Matrix-variate variance-gamma
-#'
-#' x_mvvg <- mv_random(
-#'   model = "MVVG",
-#'   n = 50,
-#'   M = M,
-#'   A = A,
-#'   U = U,
-#'   V = V,
-#'   rate = 1.25
-#' )
-#'
-#' ## Matrix-variate row skew normal
-#'
-#' x_mvrsn <- mv_random(
-#'   model = "MVRSN",
-#'   n = 50,
-#'   M = M,
-#'   A = A,
-#'   U = U,
-#'   V = V
-#' )
-#'
 
 mv_random <- function(model,
                       n = NULL,
@@ -130,8 +128,10 @@ mv_random <- function(model,
                       A = NULL,
                       U = NULL,
                       V = NULL,
+                      lambda = NULL,
+                      return_latent = FALSE,
                       cens = NULL,
-                      Ind = 1,
+                      Ind = NULL,
                       nu = NULL,
                       gamma_tilde = 2,
                       rate = 1) {
@@ -142,7 +142,7 @@ mv_random <- function(model,
 
   model <- toupper(model)
 
-  valid_models <- c("MVSN", "MVNC", "MVSNC", "MVST", "MVNIG", "MVVG", "MVRSN")
+  valid_models <- c("MVN", "MVSN", "MVNC", "MVSNC", "MVST", "MVNIG", "MVVG", "MVRSN", "MVREN")
 
   if (!(model %in% valid_models)) {
     stop(sprintf(
@@ -250,6 +250,29 @@ mv_random <- function(model,
     )
   }
 
+  if (model == "MVREN") {
+    if (is.null(n) || is.null(M) || is.null(A) || is.null(U) || is.null(V) || is.null(lambda)) {
+      stop(
+        paste0(
+          "For model = 'MVREN', you must provide ",
+          "'n', 'M', 'A', 'U', 'V' and 'lambda'."
+        )
+      )
+    }
+
+    return(
+      rmvren(
+        n = n,
+        M = M,
+        A = A,
+        Sigma = U,
+        Psi = V,
+        lambda = lambda,
+        return_latent = FALSE
+      )
+    )
+  }
+
   stop("Unexpected 'model' value.")
 }
 
@@ -259,51 +282,68 @@ mv_random <- function(model,
 #' corresponding non-internal ECM estimation function.
 #'
 #' @param model Character string specifying the model to be fitted.
-#' Supported options are:
-#' \itemize{
-#'   \item \code{"MVN"}   - Matrix Variate Normal
-#'   \item \code{"MVNC"}  - Censored Matrix Variate Normal
-#'   \item \code{"MVSN"}  - Matrix Variate Skew-Normal
-#'   \item \code{"MVSNC"} - Censored Matrix Variate Skew-Normal
-#'   \item \code{"MVST"}  - Matrix Variate Skew-t
-#'   \item \code{"MVRSN"} - Matrix Variate Row Skew-Normal
-#' }
-#' @param samples Numeric 3D array containing the observed matrix-valued data.
-#' For censored models, this should contain the observed values or lower limits.
-#' @param cc Optional 3D indicator array for censored models. Entries equal to
-#' `1` indicate censored/missing values and `0` indicate observed values.
-#' @param LS Optional 3D array of upper limits for censored models.
-#' @param precision Positive scalar. Convergence tolerance.
-#' @param MaxIter Positive integer. Maximum number of ECM iterations.
-#' @param epsilon Positive scalar used for numerical stabilization in models
-#' that require it.
-#' @param nu Positive scalar. Initial degrees of freedom for the
-#' \code{"MVST"} model.
-#' @param get.nu Logical. If `TRUE`, updates \code{nu} during ECM for the
-#' \code{"MVST"} model.
-#' @param nu_bounds Numeric vector of length two. Search interval for
-#' \code{nu} in the \code{"MVST"} model.
-#' @param normalize_Psi Logical. If `TRUE`, normalizes the estimated column
-#' covariance matrix so that its determinant equals one in the
-#' \code{"MVRSN"} model.
-#' @param M_init Optional initial value for the location matrix in the
-#' \code{"MVRSN"} model.
-#' @param A_init Optional initial value for the skewness matrix in the
-#' \code{"MVRSN"} model.
-#' @param Sigma_init Optional initial value for the row covariance matrix in the
-#' \code{"MVRSN"} model.
-#' @param Psi_init Optional initial value for the column covariance matrix in
-#' the \code{"MVRSN"} model.
-#' @param verbose Logical. If `TRUE`, prints iteration progress during fitting
-#' of the \code{"MVRSN"} model.
-#' @param eig_floor Positive scalar specifying the minimum eigenvalue used when
-#' projecting covariance matrices onto the positive definite cone in the
-#' \code{"MVRSN"} model.
-#' @param monotone_tol Positive scalar specifying the tolerance used to assess
-#' monotonicity of the observed-data log-likelihood in the \code{"MVRSN"} model.
+#' @param samples Numeric three-dimensional array containing the observed
+#' matrix-valued data.
+#' @param cc Optional censoring-indicator array for censored models.
+#' @param LS Optional array containing censoring limits.
+#' @param precision Positive numeric scalar specifying the convergence
+#' tolerance.
+#' @param MaxIter Positive integer specifying the maximum number of ECM
+#' iterations.
+#' @param nu Positive numeric scalar specifying the initial degrees of freedom
+#' for the MVST model.
+#' @param get.nu Logical scalar indicating whether the degrees-of-freedom
+#' parameter should be estimated for the MVST model.
+#' @param nu_bounds Numeric vector of length two specifying the admissible
+#' interval for the degrees-of-freedom parameter in the MVST model.
+#' @param lambda_mode Character string specifying how the exponential-rate
+#' parameter vector is handled in the MVREN model. Available options are
+#' \code{"fixed"}, \code{"unconstrained"}, and
+#' \code{"unit_A_rows"}. Under \code{"fixed"}, the rate parameters remain
+#' fixed throughout the ECM iterations. Under \code{"unconstrained"}, both
+#' the latent-effect matrix and the rate parameters are estimated without
+#' imposing a normalization constraint. Under \code{"unit_A_rows"}, each
+#' row of the latent-effect matrix is normalized to have unit Euclidean norm
+#' after each update, with the corresponding rate parameter rescaled
+#' accordingly.
+#' @param M_init Optional initial value for the location matrix. When
+#' \code{NULL}, an initial value is constructed internally.
+#' @param A_init Optional initial value for the latent-effect matrix. When
+#' \code{NULL}, an initial value is constructed internally.
+#' @param Sigma_init Optional initial value for the row covariance matrix.
+#' When \code{NULL}, an initial value is constructed internally.
+#' @param Psi_init Optional initial value for the column covariance matrix.
+#' When \code{NULL}, an initial value is constructed internally.
+#' @param lambda_init Optional positive numeric vector containing the initial
+#' exponential-rate parameters for the MVREN model. Its length must equal
+#' the number of rows of each matrix-valued observation. When \code{NULL},
+#' the initial rate vector is constructed internally.
+#' @param q_policy Character string specifying how a numerically non-positive-
+#' definite matrix \code{Q} is handled in the MVREN model. Available options
+#' are \code{"warn"}, \code{"strict"}, and \code{"regularize"}.
 #'
-#' @return
-#' The fitted object returned by the selected ECM routine.
+#' @return An object whose class depends on the selected model:
+#'   `"MVN.ECM"`, `"MVSN.ECM"`, `"MVST.ECM"`, `"MVRSN.ECM"`,
+#'   `"MVREN.ECM"`, `"MVNC.ECM"`, or `"MVSNC.ECM"`.
+#'   The returned object is a list containing the fitted model parameters,
+#'   convergence information, and model-specific diagnostic quantities.
+#'   Depending on the selected model, the returned list contains:
+#'
+#'  \describe{
+#'    \item{M}{Estimated location matrix.}
+#'    \item{A}{Estimated skewness or latent-effect matrix, when applicable.}
+#'    \item{Sigma}{Estimated row covariance or scale matrix.}
+#'    \item{Psi}{Estimated column covariance or scale matrix.}
+#'    \item{lambda}{Estimated or fixed exponential-rate vector for MVREN.}
+#'    \item{nu}{Estimated or fixed degrees of freedom for MVST.}
+#'    \item{loglik}{Final observed-data log-likelihood.}
+#'    \item{BIC}{Bayesian information criterion.}
+#'    \item{iterations}{Number of ECM iterations performed.}
+#'    \item{converged}{Logical value indicating whether the convergence
+#'       criterion was satisfied.}
+#'    \item{loglik_history}{Observed-data log-likelihood values recorded
+#'       throughout the iterations.}
+#'   }
 #'
 #' @export
 #'
@@ -321,10 +361,9 @@ mv_random <- function(model,
 #'
 #' ## Matrix-variate Normal
 #' sim_mvn <- mv_random(
-#'   model = "MVSN",
+#'   model = "MVN",
 #'   n = n,
 #'   M = M,
-#'   A = matrix(0, p, q),
 #'   U = U,
 #'   V = V
 #' )
@@ -425,25 +464,23 @@ mv_fit <- function(model,
                    LS = NULL,
                    precision = 1e-6,
                    MaxIter = 200,
-                   epsilon = 1e-8,
                    nu = 4,
                    get.nu = TRUE,
                    nu_bounds = c(0.05, 150),
-                   normalize_Psi = TRUE,
+                   lambda_mode = c("fixed", "unconstrained", "unit_A_rows"),
                    M_init = NULL,
                    A_init = NULL,
                    Sigma_init = NULL,
                    Psi_init = NULL,
-                   verbose = TRUE,
-                   eig_floor = 1e-8,
-                   monotone_tol = 1e-7) {
+                   lambda_init = NULL,
+                   q_policy = c("warn", "strict", "regularize")) {
 
   if (!is.character(model) || length(model) != 1L || is.na(model)) {
     stop("'model' must be a single character string.")
   }
 
   model <- toupper(model)
-  valid_models <- c("MVN", "MVNC", "MVSN", "MVSNC", "MVST", "MVRSN")
+  valid_models <- c("MVN", "MVNC", "MVSN", "MVSNC", "MVST", "MVRSN", "MVREN")
 
   if (!(model %in% valid_models)) {
     stop(sprintf(
@@ -492,7 +529,6 @@ mv_fit <- function(model,
         dados = samples,
         precision = precision,
         MaxIter = MaxIter,
-        epsilon = epsilon
       )
     )
   }
@@ -509,7 +545,6 @@ mv_fit <- function(model,
         LS = LS,
         precision = precision,
         MaxIter = MaxIter,
-        epsilon = epsilon
       )
     )
   }
@@ -526,7 +561,6 @@ mv_fit <- function(model,
         precision = precision,
         MaxIter = MaxIter,
         get.nu = get.nu,
-        epsilon = epsilon,
         nu_bounds = nu_bounds
       )
     )
@@ -542,18 +576,46 @@ mv_fit <- function(model,
         X = samples,
         max_iter = MaxIter,
         tol = precision,
-        normalize_Psi = TRUE,
-        M_init = NULL,
-        A_init = NULL,
-        Sigma_init = NULL,
-        Psi_init = NULL,
-        verbose = TRUE,
-        eig_floor = 1e-8,
-        monotone_tol = 1e-7
+        M_init = M_init,
+        A_init = A_init,
+        Sigma_init = Sigma_init,
+        Psi_init = Psi_init,
       )
     )
   }
 
-  stop("Unexpected 'model' value.")
+  if (model == "MVREN") {
+    if (is.null(samples)) {
+      stop(
+        "For model = 'MVREN', you must provide 'samples'.",
+        call. = FALSE
+      )
+    }
+
+    lambda_mode <- match.arg(lambda_mode)
+    q_policy <- match.arg(q_policy)
+
+    return(
+      mvren_ecm(
+        X = samples,
+        max_iter = MaxIter,
+        tol = precision,
+        lambda_mode = lambda_mode,
+        M_init = M_init,
+        A_init = A_init,
+        Sigma_init = Sigma_init,
+        Psi_init = Psi_init,
+        lambda_init = lambda_init,
+        q_policy = q_policy
+      )
+    )
+  }
+
+  stop(
+    "Unexpected 'model' value.",
+    call. = FALSE
+  )
 }
+
+
 

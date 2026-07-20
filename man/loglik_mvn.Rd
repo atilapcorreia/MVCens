@@ -19,5 +19,9 @@ loglik_mvn(samples, M, Sigma, Psi)
 Numeric scalar containing the total log-likelihood.
 }
 \description{
-Computes the observed log-likelihood for complete matrix-variate normal data.
+Computes the total observed-data log-likelihood under the matrix-variate
+normal distribution for a sample of complete matrix-valued observations.
+Each matrix in \code{samples} is evaluated using the specified location matrix
+and row and column covariance matrices, and the resulting individual
+log-density values are summed.
 }

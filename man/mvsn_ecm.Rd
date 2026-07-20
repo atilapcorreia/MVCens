@@ -16,7 +16,7 @@ mvsn_ecm(dados, precision = 1e-08, MaxIter = 50, epsilon = 1e-08)
 \item{epsilon}{Numerical tolerance for covariance regularization.}
 }
 \value{
-An object of class \code{"EM.MatrixSN"} containing:
+An object of class \code{"MVSN"} containing:
 \describe{
 \item{mu}{Estimated location matrix.}
 \item{A}{Estimated skewness matrix.}
@@ -30,14 +30,5 @@ An object of class \code{"EM.MatrixSN"} containing:
 }
 \description{
 Fits a complete-data matrix-variate skew-normal model by an ECM algorithm.
-The model is based on the stochastic representation
-}
-\details{
-\deqn{
-X_i = \mu + W_i A + V_i,
-}
-
-where \eqn{W_i} follows a half-normal latent distribution and
-\eqn{V_i \sim MN_{p \times q}(0, \Sigma, \Psi)}.
 }
 \keyword{internal}

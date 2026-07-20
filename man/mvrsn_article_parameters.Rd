@@ -15,6 +15,5 @@ A list with M, A, Sigma, and Psi.
 \description{
 The returned matrices match the dimensions and values described in the PDF.
 Psi is normalized to det(Psi) = 1 by default, matching the identifiability
-convention used by the theory and by \code{mvrsn_ecm(normalize_Psi = TRUE)}.
+convention used by the theory.
 }
-\keyword{internal}

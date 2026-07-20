@@ -9,6 +9,7 @@
 #' @return A symmetric positive definite matrix.
 #'
 #' @keywords internal
+#' @noRd
 make_posdef <- function(X, epsilon = 1e-8) {
 
   X <- (X + t(X)) / 2
@@ -37,6 +38,7 @@ make_posdef <- function(X, epsilon = 1e-8) {
 #' @return A numeric vector containing the entries of `X` stacked by columns.
 #'
 #' @keywords internal
+#' @noRd
 vec_col <- function(X) {
 
   as.vector(matrixNormal::vec(X))
@@ -54,6 +56,7 @@ vec_col <- function(X) {
 #' @return The inverse of `A`.
 #'
 #' @keywords internal
+#' @noRd
 solve_sym_pd <- function(A, epsilon = 1e-8) {
 
   A <- make_posdef((A + t(A)) / 2, epsilon = epsilon)
@@ -74,6 +77,7 @@ solve_sym_pd <- function(A, epsilon = 1e-8) {
 #' @return A positive definite matrix with determinant approximately equal to one.
 #'
 #' @keywords internal
+#' @noRd
 normalize_cov_constraint <- function(A, epsilon = 1e-8) {
 
   A <- make_posdef((A + t(A)) / 2, epsilon = epsilon)
@@ -86,15 +90,22 @@ normalize_cov_constraint <- function(A, epsilon = 1e-8) {
 
 #' Compute the ECM convergence criterion
 #'
-#' Computes an Aitken-type convergence criterion based on the last three
+#' Computes the absolute relative change between the current and previous
 #' log-likelihood values.
 #'
-#' @param loglik Numeric vector containing the log-likelihood values.
-#' @param iter Current iteration index.
+#' The function returns \code{Inf} when fewer than two log-likelihood values
+#' are available or when either of the required values is not finite.
 #'
-#' @return A nonnegative scalar convergence criterion.
+#' @param loglik Numeric vector containing the log-likelihood values obtained
+#'   throughout the ECM iterations.
+#' @param iter Positive integer indicating the current iteration index.
+#'
+#' @return A nonnegative numeric scalar representing the absolute relative
+#'   change in the log-likelihood, or \code{Inf} when the criterion cannot be
+#'   computed.
 #'
 #' @keywords internal
+#' @noRd
 compute_ecm_criterion <- function(loglik, iter) {
 
   if (iter <= 1L) {
@@ -121,6 +132,7 @@ compute_ecm_criterion <- function(loglik, iter) {
 #' @return Invisibly returns `TRUE` if the input is valid.
 #'
 #' @keywords internal
+#' @noRd
 validate_mvn_input <- function(samples) {
 
   if (length(dim(samples)) != 3L) {
@@ -154,6 +166,7 @@ validate_mvn_input <- function(samples) {
 #' @return Invisibly returns `TRUE` if all inputs are valid.
 #'
 #' @keywords internal
+#' @noRd
 validate_mvnc_input <- function(samples, cc, LS) {
 
   validate_mvn_input(samples)
@@ -192,6 +205,7 @@ validate_mvnc_input <- function(samples, cc, LS) {
 #' @return A finite numeric scalar.
 #'
 #' @keywords internal
+#' @noRd
 get_observed_fill_value <- function(samples, cc = NULL) {
 
   observed <- if (is.null(cc)) samples else samples[cc == 0]
@@ -235,6 +249,7 @@ get_observed_fill_value <- function(samples, cc = NULL) {
 #' }
 #'
 #' @keywords internal
+#' @noRd
 get_truncated_moments <- function(y, cc1, LS1, mu1, Vari, epsilon = 1e-8) {
 
   miss <- which(cc1 == 1)
@@ -301,6 +316,7 @@ get_truncated_moments <- function(y, cc1, LS1, mu1, Vari, epsilon = 1e-8) {
 #' @return A positive definite covariance-type matrix.
 #'
 #' @keywords internal
+#' @noRd
 moment_to_omega <- function(tuy, tuyy, mu1, epsilon = 1e-8) {
 
   omega <- tuyy - tuy %*% t(mu1) - mu1 %*% t(tuy) + mu1 %*% t(mu1)
@@ -326,6 +342,7 @@ moment_to_omega <- function(tuy, tuyy, mu1, epsilon = 1e-8) {
 #' moments, predicted mean matrix, and covariance-type correction matrix.
 #'
 #' @keywords internal
+#' @noRd
 get_censored_sample_stats <- function(samples, cc, LS, mu, Vari, j, epsilon = 1e-8) {
 
   y1 <- vec_col(samples[, , j])
@@ -356,7 +373,11 @@ get_censored_sample_stats <- function(samples, cc, LS, mu, Vari, j, epsilon = 1e
 
 #' Matrix-variate normal log-likelihood
 #'
-#' Computes the observed log-likelihood for complete matrix-variate normal data.
+#' Computes the total observed-data log-likelihood under the matrix-variate
+#' normal distribution for a sample of complete matrix-valued observations.
+#' Each matrix in `samples` is evaluated using the specified location matrix
+#' and row and column covariance matrices, and the resulting individual
+#' log-density values are summed.
 #'
 #' @param samples Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param M Location matrix of dimension \eqn{p \times q}.
@@ -499,6 +520,7 @@ loglik_mvnc <- function(cc, LS, samples, M, Sigma, Psi, epsilon = 1e-8) {
 #' }
 #'
 #' @keywords internal
+#' @noRd
 somaL3 <- function(L1, Sigma, Psi, epsilon = 1e-8) {
 
   n <- ncol(L1)
@@ -525,15 +547,9 @@ somaL3 <- function(L1, Sigma, Psi, epsilon = 1e-8) {
 #' ECM estimation for the censored matrix-variate normal model
 #'
 #' Fits a censored matrix-variate normal model by an ECM algorithm. The model
-#' assumes matrix-valued observations
-#'
-#' \deqn{
-#' X_i \sim MN_{p \times q}(\mu, \Sigma, \Psi),
-#' }
-#'
-#' possibly subject to censoring or missingness. The algorithm alternates between
-#' computing conditional moments of censored entries and updating the location,
-#' row covariance, and column covariance matrices.
+#' assumes matrix-valued observations possibly subject to censoring or missingness.
+#' The algorithm alternates between computing conditional moments of censored entries
+#' and updating the location, row covariance, and column covariance matrices.
 #'
 #' @param samples Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param cc Censoring indicator array with the same dimensions as `samples`.
@@ -555,7 +571,7 @@ somaL3 <- function(L1, Sigma, Psi, epsilon = 1e-8) {
 #' }
 #'
 #' @keywords internal
-mvnc_ecm <- function(samples, cc, LS, precision = 1e-7, MaxIter = 50) {
+mvnc_ecm <- function(samples, cc, LS, precision = 1e-6, MaxIter = 50) {
 
   validate_mvnc_input(samples, cc, LS)
 
@@ -663,15 +679,7 @@ mvnc_ecm <- function(samples, cc, LS, precision = 1e-7, MaxIter = 50) {
 
 #' ECM estimation for the matrix-variate normal model
 #'
-#' Fits a complete-data matrix-variate normal model by an ECM algorithm. The model
-#' assumes
-#'
-#' \deqn{
-#' X_i \sim MN_{p \times q}(\mu, \Sigma, \Psi),
-#' }
-#'
-#' where `mu` is the location matrix, `Sigma` is the row covariance matrix, and
-#' `Psi` is the column covariance matrix.
+#' Fits a complete-data matrix-variate normal model by an ECM algorithm.
 #'
 #' @param samples Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param precision Positive scalar. Convergence tolerance.
@@ -689,7 +697,7 @@ mvnc_ecm <- function(samples, cc, LS, precision = 1e-7, MaxIter = 50) {
 #' }
 #'
 #' @keywords internal
-mvn_ecm <- function(samples, precision = 1e-7, MaxIter = 50) {
+mvn_ecm <- function(samples, precision = 1e-6, MaxIter = 50) {
 
   validate_mvn_input(samples)
 

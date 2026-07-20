@@ -393,11 +393,9 @@ mvrsn_log_pmvnorm_upper <- function(upper, mean, sigma) {
 
 #' Mean matrix of the MVRSN distribution
 #'
-#' For standard half-normal latent variables, E(W_i) = sqrt(2 / pi). Therefore
-#' E(X) = M + sqrt(2 / pi) A.
-#'
 #' @param M Location matrix.
 #' @param A Skewness matrix.
+#'
 #' @return The theoretical mean matrix.
 #'
 #' @export
@@ -413,9 +411,8 @@ mvrsn_mean <- function(M, A) {
 
 #' Row and column covariance summaries of the MVRSN distribution
 #'
-#' These are the matrix covariance summaries derived in the theory:
-#' Crow = (1 - 2/pi) diag(diag(A A')) + tr(Psi) Sigma
-#' Ccolumn = (1 - 2/pi) A' A + tr(Sigma) Psi.
+#' Computes the theoretical row and column covariance summaries of the
+#' matrix-variate row skew-normal distribution.
 #'
 #' @param M Location matrix. It is accepted for API symmetry and dimension
 #'   validation, but it does not enter the covariance formula.
@@ -438,27 +435,24 @@ mvrsn_covariances <- function(M, A, Sigma, Psi) {
 # Density and likelihood
 # ---------------------------------------------------------------------------
 
-#' Evaluates the closed-form density from Proposition 1 of the theory. With
-#' \eqn{Y = X - M}, the implementation computes
-#' \deqn{
-#' c = \mathrm{tr}\{\Sigma^{-1} Y \Psi^{-1} Y^\top\},
-#' }
-#' \deqn{
-#' b = \mathrm{diag}\{A \Psi^{-1} Y^\top \Sigma^{-1}\},
-#' }
-#' \deqn{
-#' Q = I_p + \Sigma^{-1} \circ (A \Psi^{-1} A^\top),
-#' }
-#' where \eqn{\circ} denotes the Hadamard product. The normal orthant
-#' probability is evaluated with \pkg{mvtnorm}.
+#' Density of the matrix-variate row skew-normal distribution
 #'
-#' @param X Matrix of dimension p x q.
-#' @param M Location matrix of dimension p x q.
-#' @param A Skewness matrix of dimension p x q.
-#' @param Sigma Positive definite row covariance matrix of dimension p x p.
-#' @param Psi Positive definite column covariance matrix of dimension q x q.
-#' @param log Return log-density when TRUE.
-#' @return Numeric density or log-density.
+#' Evaluates the closed-form probability density or log-density of a
+#' matrix-variate row skew-normal distribution at a given matrix-valued
+#' observation, using the specified location, skewness, row covariance, and
+#' column covariance parameters.
+#'
+#' @param X Matrix of dimension \eqn{p \times q}.
+#' @param M Location matrix of dimension \eqn{p \times q}.
+#' @param A Skewness matrix of dimension \eqn{p \times q}.
+#' @param Sigma Positive definite row covariance matrix of dimension
+#'   \eqn{p \times p}.
+#' @param Psi Positive definite column covariance matrix of dimension
+#'   \eqn{q \times q}.
+#' @param log Logical. If \code{TRUE}, returns the log-density.
+#'
+#' @return A numeric scalar containing the density evaluated at \code{X}.
+#'   When \code{log = TRUE}, the corresponding log-density is returned.
 #'
 #' @export
 dmvrsn <- function(X, M, A, Sigma, Psi, log = FALSE) {
@@ -724,22 +718,24 @@ mvrsn_ecm <- function(X,
   npar <- 2 * (p * q) + (p * (p + 1) / 2) + (q * (q + 1) / 2) - as.integer(normalize_Psi)
   BIC <- -2 * loglik[count] + npar * log(n)
 
-  list(
-    M = M,
-    A = A,
-    Sigma = Sigma,
-    Psi = Psi,
-    loglik = loglik[count],
-    loglik_history = loglik,
-    iterations = count,
-    BIC = BIC,
-    converged = (criterion <= tol),
-    criterion = criterion,
-    monotone = monotone,
-    monotone_drops = monotone_drops,
-    normalize_Psi = normalize_Psi,
-    npar = npar
-  )
+  obj.out <- list(M = M,
+                  A = A,
+                  Sigma = Sigma,
+                  Psi = Psi,
+                  loglik = loglik[count],
+                  loglik_history = loglik,
+                  iterations = count,
+                  BIC = BIC,
+                  converged = (criterion <= tol),
+                  criterion = criterion,
+                  monotone = monotone,
+                  monotone_drops = monotone_drops,
+                  normalize_Psi = normalize_Psi,
+                  npar = npar)
+
+  class(obj.out) <- "MVRSN.ECM"
+  obj.out
+
 }
 
 
@@ -751,12 +747,12 @@ mvrsn_ecm <- function(X,
 #'
 #' The returned matrices match the dimensions and values described in the PDF.
 #' Psi is normalized to det(Psi) = 1 by default, matching the identifiability
-#' convention used by the theory and by `mvrsn_ecm(normalize_Psi = TRUE)`.
+#' convention used by the theory.
 #'
 #' @param normalize_Psi Normalize Psi to determinant one.
 #' @return A list with M, A, Sigma, and Psi.
 #'
-#' @keywords internal
+#' @export
 mvrsn_article_parameters <- function(normalize_Psi = TRUE) {
   M <- matrix(c(
     0.50, 1.00, 1.00, 1.00,
@@ -797,6 +793,7 @@ mvrsn_article_parameters <- function(normalize_Psi = TRUE) {
 #' @return A one-row data frame of errors and diagnostics.
 #'
 #' @keywords internal
+#' @noRd
 mvrsn_fit_diagnostics <- function(fit, truth) {
   data.frame(
     err_M = mvrsn_relative_frobenius(fit$M, truth$M),
@@ -831,8 +828,7 @@ mvrsn_fit_diagnostics <- function(fit, truth) {
 #' @param verbose Print progress and ECM iterations.
 #' @return A list with per-replication results and a sample-size summary.
 #'
-#' @keywords internal
-#' @noRd
+#' @export
 mvrsn_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400, 800, 1600),
                               replications = 200,
                               truth = mvrsn_article_parameters(),

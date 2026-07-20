@@ -1,7 +1,8 @@
-#' Multivariate skew-t density
+#' Density of the multivariate skew-\eqn{t} distribution
 #'
-#' Evaluates the density of a multivariate skew-t distribution using a
-#' latent-variable parameterization.
+#' Evaluates the probability density or log-density of a multivariate
+#' skew-\eqn{t} distribution at a given observation, with covariance-matrix
+#' regularization controlled by \code{epsilon}.
 #'
 #' @param y Numeric vector of observed values.
 #' @param mu Numeric location vector.
@@ -182,16 +183,7 @@ loglik_mvst <- function(nu, dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
 
 #' ECM estimation for the matrix-variate skew-t model
 #'
-#' Fits a complete-data matrix-variate skew-t model by an ECM algorithm. The
-#' model is based on the stochastic representation
-#'
-#' \deqn{
-#' X_i = \mu + U_i^{-1/2}(W_i A + V_i),
-#' }
-#'
-#' where \eqn{W_i} is a half-normal latent variable,
-#' \eqn{U_i \sim Gamma(\nu/2, \nu/2)}, and
-#' \eqn{V_i \sim MN_{p \times q}(0, \Sigma, \Psi)}.
+#' Fits a complete-data matrix-variate skew-t model by an ECM algorithm.
 #'
 #' @param dados Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param nu Positive scalar. Initial degrees-of-freedom value.

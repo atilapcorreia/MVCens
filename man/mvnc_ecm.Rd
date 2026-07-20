@@ -4,7 +4,7 @@
 \alias{mvnc_ecm}
 \title{ECM estimation for the censored matrix-variate normal model}
 \usage{
-mvnc_ecm(samples, cc, LS, precision = 1e-07, MaxIter = 50)
+mvnc_ecm(samples, cc, LS, precision = 1e-06, MaxIter = 50)
 }
 \arguments{
 \item{samples}{Numeric array with dimensions \eqn{p \times q \times n}.}
@@ -33,15 +33,8 @@ An object of class \code{"MVNC.ECM"} containing:
 }
 \description{
 Fits a censored matrix-variate normal model by an ECM algorithm. The model
-assumes matrix-valued observations
-}
-\details{
-\deqn{
-X_i \sim MN_{p \times q}(\mu, \Sigma, \Psi),
-}
-
-possibly subject to censoring or missingness. The algorithm alternates between
-computing conditional moments of censored entries and updating the location,
-row covariance, and column covariance matrices.
+assumes matrix-valued observations possibly subject to censoring or missingness.
+The algorithm alternates between computing conditional moments of censored entries
+and updating the location, row covariance, and column covariance matrices.
 }
 \keyword{internal}

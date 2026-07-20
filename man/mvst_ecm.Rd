@@ -46,16 +46,6 @@ An object of class \code{"MVST.ECM"} containing:
 }
 }
 \description{
-Fits a complete-data matrix-variate skew-t model by an ECM algorithm. The
-model is based on the stochastic representation
-}
-\details{
-\deqn{
-X_i = \mu + U_i^{-1/2}(W_i A + V_i),
-}
-
-where \eqn{W_i} is a half-normal latent variable,
-\eqn{U_i \sim Gamma(\nu/2, \nu/2)}, and
-\eqn{V_i \sim MN_{p \times q}(0, \Sigma, \Psi)}.
+Fits a complete-data matrix-variate skew-t model by an ECM algorithm.
 }
 \keyword{internal}

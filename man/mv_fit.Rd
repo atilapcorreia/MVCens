@@ -11,84 +11,98 @@ mv_fit(
   LS = NULL,
   precision = 1e-06,
   MaxIter = 200,
-  epsilon = 1e-08,
   nu = 4,
   get.nu = TRUE,
   nu_bounds = c(0.05, 150),
-  normalize_Psi = TRUE,
+  lambda_mode = c("fixed", "unconstrained", "unit_A_rows"),
   M_init = NULL,
   A_init = NULL,
   Sigma_init = NULL,
   Psi_init = NULL,
-  verbose = TRUE,
-  eig_floor = 1e-08,
-  monotone_tol = 1e-07
+  lambda_init = NULL,
+  q_policy = c("warn", "strict", "regularize")
 )
 }
 \arguments{
-\item{model}{Character string specifying the model to be fitted.
-Supported options are:
-\itemize{
-\item \code{"MVN"}   - Matrix Variate Normal
-\item \code{"MVNC"}  - Censored Matrix Variate Normal
-\item \code{"MVSN"}  - Matrix Variate Skew-Normal
-\item \code{"MVSNC"} - Censored Matrix Variate Skew-Normal
-\item \code{"MVST"}  - Matrix Variate Skew-t
-\item \code{"MVRSN"} - Matrix Variate Row Skew-Normal
-}}
+\item{model}{Character string specifying the model to be fitted.}
 
-\item{samples}{Numeric 3D array containing the observed matrix-valued data.
-For censored models, this should contain the observed values or lower limits.}
+\item{samples}{Numeric three-dimensional array containing the observed
+matrix-valued data.}
 
-\item{cc}{Optional 3D indicator array for censored models. Entries equal to
-\code{1} indicate censored/missing values and \code{0} indicate observed values.}
+\item{cc}{Optional censoring-indicator array for censored models.}
 
-\item{LS}{Optional 3D array of upper limits for censored models.}
+\item{LS}{Optional array containing censoring limits.}
 
-\item{precision}{Positive scalar. Convergence tolerance.}
+\item{precision}{Positive numeric scalar specifying the convergence
+tolerance.}
 
-\item{MaxIter}{Positive integer. Maximum number of ECM iterations.}
+\item{MaxIter}{Positive integer specifying the maximum number of ECM
+iterations.}
 
-\item{epsilon}{Positive scalar used for numerical stabilization in models
-that require it.}
+\item{nu}{Positive numeric scalar specifying the initial degrees of freedom
+for the MVST model.}
 
-\item{nu}{Positive scalar. Initial degrees of freedom for the
-\code{"MVST"} model.}
+\item{get.nu}{Logical scalar indicating whether the degrees-of-freedom
+parameter should be estimated for the MVST model.}
 
-\item{get.nu}{Logical. If \code{TRUE}, updates \code{nu} during ECM for the
-\code{"MVST"} model.}
+\item{nu_bounds}{Numeric vector of length two specifying the admissible
+interval for the degrees-of-freedom parameter in the MVST model.}
 
-\item{nu_bounds}{Numeric vector of length two. Search interval for
-\code{nu} in the \code{"MVST"} model.}
+\item{lambda_mode}{Character string specifying how the exponential-rate
+parameter vector is handled in the MVREN model. Available options are
+\code{"fixed"}, \code{"unconstrained"}, and
+\code{"unit_A_rows"}. Under \code{"fixed"}, the rate parameters remain
+fixed throughout the ECM iterations. Under \code{"unconstrained"}, both
+the latent-effect matrix and the rate parameters are estimated without
+imposing a normalization constraint. Under \code{"unit_A_rows"}, each
+row of the latent-effect matrix is normalized to have unit Euclidean norm
+after each update, with the corresponding rate parameter rescaled
+accordingly.}
 
-\item{normalize_Psi}{Logical. If \code{TRUE}, normalizes the estimated column
-covariance matrix so that its determinant equals one in the
-\code{"MVRSN"} model.}
+\item{M_init}{Optional initial value for the location matrix. When
+\code{NULL}, an initial value is constructed internally.}
 
-\item{M_init}{Optional initial value for the location matrix in the
-\code{"MVRSN"} model.}
+\item{A_init}{Optional initial value for the latent-effect matrix. When
+\code{NULL}, an initial value is constructed internally.}
 
-\item{A_init}{Optional initial value for the skewness matrix in the
-\code{"MVRSN"} model.}
+\item{Sigma_init}{Optional initial value for the row covariance matrix.
+When \code{NULL}, an initial value is constructed internally.}
 
-\item{Sigma_init}{Optional initial value for the row covariance matrix in the
-\code{"MVRSN"} model.}
+\item{Psi_init}{Optional initial value for the column covariance matrix.
+When \code{NULL}, an initial value is constructed internally.}
 
-\item{Psi_init}{Optional initial value for the column covariance matrix in
-the \code{"MVRSN"} model.}
+\item{lambda_init}{Optional positive numeric vector containing the initial
+exponential-rate parameters for the MVREN model. Its length must equal
+the number of rows of each matrix-valued observation. When \code{NULL},
+the initial rate vector is constructed internally.}
 
-\item{verbose}{Logical. If \code{TRUE}, prints iteration progress during fitting
-of the \code{"MVRSN"} model.}
-
-\item{eig_floor}{Positive scalar specifying the minimum eigenvalue used when
-projecting covariance matrices onto the positive definite cone in the
-\code{"MVRSN"} model.}
-
-\item{monotone_tol}{Positive scalar specifying the tolerance used to assess
-monotonicity of the observed-data log-likelihood in the \code{"MVRSN"} model.}
+\item{q_policy}{Character string specifying how a numerically non-positive-
+definite matrix \code{Q} is handled in the MVREN model. Available options
+are \code{"warn"}, \code{"strict"}, and \code{"regularize"}.}
 }
 \value{
-The fitted object returned by the selected ECM routine.
+An object whose class depends on the selected model:
+\code{"MVN.ECM"}, \code{"MVSN.ECM"}, \code{"MVST.ECM"}, \code{"MVRSN.ECM"},
+\code{"MVREN.ECM"}, \code{"MVNC.ECM"}, or \code{"MVSNC.ECM"}.
+The returned object is a list containing the fitted model parameters,
+convergence information, and model-specific diagnostic quantities.
+Depending on the selected model, the returned list contains:
+
+\describe{
+\item{M}{Estimated location matrix.}
+\item{A}{Estimated skewness or latent-effect matrix, when applicable.}
+\item{Sigma}{Estimated row covariance or scale matrix.}
+\item{Psi}{Estimated column covariance or scale matrix.}
+\item{lambda}{Estimated or fixed exponential-rate vector for MVREN.}
+\item{nu}{Estimated or fixed degrees of freedom for MVST.}
+\item{loglik}{Final observed-data log-likelihood.}
+\item{BIC}{Bayesian information criterion.}
+\item{iterations}{Number of ECM iterations performed.}
+\item{converged}{Logical value indicating whether the convergence
+criterion was satisfied.}
+\item{loglik_history}{Observed-data log-likelihood values recorded
+throughout the iterations.}
+}
 }
 \description{
 Fits one of the matrix-variate models implemented in the package using the
@@ -108,10 +122,9 @@ V <- diag(q)
 
 ## Matrix-variate Normal
 sim_mvn <- mv_random(
-  model = "MVSN",
+  model = "MVN",
   n = n,
   M = M,
-  A = matrix(0, p, q),
   U = U,
   V = V
 )
