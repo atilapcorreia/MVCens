@@ -190,6 +190,14 @@ the update sequence of an individual ECM run.
 - longitudinal multivariate systems; and
 - financial panels observed across assets and time.
 
+## Installation
+
+Install the development version of `MVCens` from GitHub:
+
+# install.packages("remotes")
+remotes::install_github("atilapcorreia/MVCens")
+
+
 ## Quarterly Dow-Jones dividends and divisor, 1920–1934
 
 The object `dj_data` is a matrix-valued longitudinal example represented as
