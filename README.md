@@ -195,6 +195,7 @@ the update sequence of an individual ECM run.
 Install the development version of `MVCens` from GitHub:
 
 # install.packages("remotes")
+
 remotes::install_github("atilapcorreia/MVCens")
 
 
