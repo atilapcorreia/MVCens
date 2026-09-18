@@ -29,22 +29,6 @@ make_posdef <- function(X, epsilon = 1e-8) {
   X + shift * diag(nrow(X))
 }
 
-#' Vectorize a matrix by columns
-#'
-#' Converts a matrix into a vector using column-wise ordering.
-#'
-#' @param X Numeric matrix.
-#'
-#' @return A numeric vector containing the entries of `X` stacked by columns.
-#'
-#' @keywords internal
-#' @noRd
-vec_col <- function(X) {
-
-  as.vector(matrixNormal::vec(X))
-
-}
-
 #' Invert a symmetric positive definite matrix
 #'
 #' Stabilizes a matrix to be positive definite and computes its inverse using
@@ -135,20 +119,31 @@ compute_ecm_criterion <- function(loglik, iter) {
 #' @noRd
 validate_mvn_input <- function(samples) {
 
-  if (length(dim(samples)) != 3L) {
+  if (!is.numeric(samples) || length(dim(samples)) != 3L ||
+      any(dim(samples) < 1L)) {
 
-    stop("'samples' deve ser um array 3D com dimensoes p x q x n.")
+    stop("'samples' deve ser um array numerico 3D com dimensoes p x q x n.",
+         call. = FALSE)
 
   }
 
   if (anyNA(samples)) {
 
-    stop("'samples' contem NA. Trate os dados antes de rodar o ECM.")
+    stop("'samples' contem NA. Trate os X antes de rodar o ECM.")
 
   }
 
   invisible(TRUE)
 
+}
+
+# Keep a matrix observation as a matrix when p or q is one. Base R drops
+# singleton dimensions from samples[, , j], which breaks matrixNormal's matrix
+# contract for valid 1 x q and p x 1 observations.
+matrix_sample_at <- function(samples, j) {
+  dimensions <- dim(samples)
+  matrix(samples[, , j, drop = TRUE], nrow = dimensions[[1L]],
+         ncol = dimensions[[2L]])
 }
 
 #' Validate censored matrix-variate normal input data
@@ -186,6 +181,26 @@ validate_mvnc_input <- function(samples, cc, LS) {
   if (!all(cc %in% c(0, 1))) {
 
     stop("'cc' deve conter apenas 0 e 1.")
+
+  }
+
+  censored <- cc == 1
+
+  if (any(censored & samples > LS)) {
+
+    stop("Os limites censurados devem satisfazer 'samples' <= 'LS'.")
+
+  }
+
+  completely_missing <- censored & is.infinite(samples) & samples < 0 &
+    is.infinite(LS) & LS > 0
+
+  if (all(censored) && all(completely_missing)) {
+
+    stop(paste(
+      "Nao e possivel estimar o modelo: todos os dados estao completamente",
+      "ausentes e nenhum limite de censura informativo foi fornecido."
+    ))
 
   }
 
@@ -345,10 +360,10 @@ moment_to_omega <- function(tuy, tuyy, mu1, epsilon = 1e-8) {
 #' @noRd
 get_censored_sample_stats <- function(samples, cc, LS, mu, Vari, j, epsilon = 1e-8) {
 
-  y1 <- vec_col(samples[, , j])
-  cc1 <- vec_col(cc[, , j])
-  LS1 <- vec_col(LS[, , j])
-  mu1 <- matrix(vec_col(mu), ncol = 1)
+  y1 <- matrix_vectorize(matrix_sample_at(samples, j))
+  cc1 <- matrix_vectorize(matrix_sample_at(cc, j))
+  LS1 <- matrix_vectorize(matrix_sample_at(LS, j))
+  mu1 <- matrix(matrix_vectorize(mu), ncol = 1)
 
   moments <- get_truncated_moments(
     y = y1,
@@ -374,18 +389,23 @@ get_censored_sample_stats <- function(samples, cc, LS, mu, Vari, j, epsilon = 1e
 #' Matrix-variate normal log-likelihood
 #'
 #' Computes the total observed-data log-likelihood under the matrix-variate
-#' normal distribution for a sample of complete matrix-valued observations.
-#' Each matrix in `samples` is evaluated using the specified location matrix
-#' and row and column covariance matrices, and the resulting individual
-#' log-density values are summed.
+#' normal distribution for complete matrix-valued observations. Each `p` by
+#' `q` slice in `samples` is evaluated using the location matrix `M`, row
+#' covariance `Sigma`, and column covariance `Psi`; the individual log-density
+#' contributions are summed.
 #'
 #' @param samples Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param M Location matrix of dimension \eqn{p \times q}.
 #' @param Sigma Row covariance matrix of dimension \eqn{p \times p}.
 #' @param Psi Column covariance matrix of dimension \eqn{q \times q}.
 #'
-#' @return Numeric scalar containing the total log-likelihood.
+#' @return A finite numeric scalar containing the total log-likelihood.
 #'
+#' @examples
+#' M <- matrix(0, 3, 4)
+#' x <- array(seq(-0.2, 0.9, length.out = 12), dim = c(3, 4, 1))
+#' loglik_mvn(x, M = M, Sigma = diag(3), Psi = diag(4))
+#' @family MVCens likelihood functions
 #' @export
 loglik_mvn <- function(samples, M, Sigma, Psi) {
 
@@ -396,7 +416,7 @@ loglik_mvn <- function(samples, M, Sigma, Psi) {
   auxiliary_variable <- 0
 
   for (j in seq_len(n)) {
-    auxiliary_variable <- auxiliary_variable + matrixNormal::dmatnorm(samples[, , j],
+    auxiliary_variable <- auxiliary_variable + matrixNormal::dmatnorm(matrix_sample_at(samples, j),
                                                                       M,
                                                                       Sigma,
                                                                       Psi,
@@ -410,23 +430,35 @@ loglik_mvn <- function(samples, M, Sigma, Psi) {
 
 #' Censored matrix-variate normal log-likelihood
 #'
-#' Computes the observed log-likelihood for censored matrix-variate normal data.
-#' Fully observed matrices are evaluated through the matrix-normal density.
-#' Fully censored matrices are evaluated through the matrix-normal probability,
-#' and partially censored matrices are handled by conditioning on the observed
-#' entries.
+#' Computes the observed-data log-likelihood for censored and/or missing
+#' matrix-variate normal data, following the matrix-normal censored-data
+#' formulation based on truncated moments. Fully observed matrices are evaluated
+#' through the matrix-normal density. Fully censored matrices are evaluated
+#' through the matrix-normal probability, and partially censored matrices are
+#' handled by conditioning on the observed entries.
 #'
-#' @param cc Censoring indicator array. Entries equal to `1` indicate censored or
-#' missing values.
-#' @param LS Array of upper censoring limits.
+#' @param cc Censoring indicator array with the same dimensions as `samples`.
+#'   Entries equal to `1` indicate censored or missing values; entries equal to
+#'   `0` indicate observed values.
+#' @param LS Array of upper censoring limits with the same dimensions as
+#'   `samples`. Censored entries must satisfy `samples <= LS`.
 #' @param samples Numeric array with dimensions \eqn{p \times q \times n}.
-#' @param M Location matrix.
-#' @param Sigma Row covariance matrix.
-#' @param Psi Column covariance matrix.
+#' @param M Location matrix of dimension \eqn{p \times q}.
+#' @param Sigma Row covariance matrix of dimension \eqn{p \times p}.
+#' @param Psi Column covariance matrix of dimension \eqn{q \times q}.
 #' @param epsilon Positive tolerance used for numerical stabilization.
 #'
-#' @return Numeric scalar containing the censored-data log-likelihood.
+#' @return A finite numeric scalar containing the censored-data log-likelihood.
 #'
+#' @examples
+#' M <- matrix(0, 3, 4)
+#' x <- array(seq(-0.2, 2.1, length.out = 24), dim = c(3, 4, 2))
+#' cc <- array(0, dim = dim(x))
+#' cc[1, 1, 2] <- 1
+#' limits <- array(Inf, dim = dim(x))
+#' limits[1, 1, 2] <- 1.2
+#' loglik_mvnc(cc, limits, x, M, diag(3), diag(4))
+#' @family MVCens likelihood functions
 #' @export
 loglik_mvnc <- function(cc, LS, samples, M, Sigma, Psi, epsilon = 1e-8) {
 
@@ -438,19 +470,19 @@ loglik_mvnc <- function(cc, LS, samples, M, Sigma, Psi, epsilon = 1e-8) {
 
   ver <- numeric(n)
   Vari <- kronecker(Psi, Sigma)
-  mu1 <- vec_col(M)
+  mu1 <- matrix_vectorize(M)
 
   for (j in seq_len(n)) {
 
-    cc1  <- vec_col(cc[, , j])
-    LS1  <- vec_col(LS[, , j])
-    y1   <- vec_col(samples[, , j])
+    cc1  <- matrix_vectorize(cc[, , j])
+    LS1  <- matrix_vectorize(LS[, , j])
+    y1   <- matrix_vectorize(matrix_sample_at(samples, j))
     miss <- which(cc1 == 1)
     obs  <- which(cc1 == 0)
 
     if (length(miss) == 0L) {
 
-      ver[j] <- matrixNormal::dmatnorm(samples[, , j],
+      ver[j] <- matrixNormal::dmatnorm(matrix_sample_at(samples, j),
                                       M,
                                       Sigma,
                                       Psi,
@@ -461,13 +493,15 @@ loglik_mvnc <- function(cc, LS, samples, M, Sigma, Psi, epsilon = 1e-8) {
 
     if (length(miss) == p * q) {
 
-      ver[j] <- matrixNormal::pmatnorm(Lower = samples[, , j],
-                                       Upper = LS[, , j],
-                                       M,
-                                       Sigma,
-                                       Psi,
-                                       tol = .Machine$double.eps^0.5,
-                                       log = TRUE)
+      probability <- matrixNormal::pmatnorm(Lower = matrix_sample_at(samples, j),
+                                             Upper = matrix_sample_at(LS, j),
+                                             M,
+                                             Sigma,
+                                             Psi,
+                                             tol = .Machine$double.eps^0.5,
+                                             keepAttr = FALSE)
+      probability <- max(as.numeric(probability), .Machine$double.xmin)
+      ver[j] <- log(probability)
       next
     }
 
@@ -556,30 +590,46 @@ somaL3 <- function(L1, Sigma, Psi, epsilon = 1e-8) {
 #' Entries equal to `1` indicate censored or missing values.
 #' @param LS Array of upper censoring limits.
 #' @param precision Positive scalar. Convergence tolerance.
-#' @param MaxIter Positive integer. Maximum number of ECM iterations.
+#' @param max_iter Positive integer. Maximum number of ECM iterations.
 #'
 #' @return An object of class `"MVNC.ECM"` containing:
 #' \describe{
-#'   \item{mu}{Estimated location matrix.}
+#'   \item{M, mu}{Estimated location matrix. `M` is the canonical name and
+#'   `mu` is retained as a compatibility alias.}
 #'   \item{Sigma}{Estimated row covariance matrix.}
 #'   \item{Psi}{Estimated column covariance matrix.}
 #'   \item{dadosPred}{Array with predicted conditional values for censored entries.}
 #'   \item{loglik}{Final observed log-likelihood.}
+#'   \item{loglik_history}{Sequence of observed log-likelihood values.}
 #'   \item{BIC}{Bayesian information criterion.}
-#'   \item{iter}{Number of iterations performed.}
+#'   \item{iterations, iter}{Number of iterations performed. `iter` is a
+#'   compatibility alias.}
 #'   \item{converged}{Logical value indicating whether convergence was reached.}
+#'   \item{criterion}{Final relative log-likelihood change.}
+#'   \item{monotone}{Whether the likelihood history avoided decreases larger
+#'   than the numerical tolerance.}
+#'   \item{monotone_drops}{Recorded likelihood decreases beyond that tolerance.}
+#'   \item{normalize_Psi}{Always `TRUE`; `Psi` uses the normalized representation.}
+#'   \item{npar}{Parameter count used in the BIC.}
 #' }
 #'
 #' @keywords internal
-mvnc_ecm <- function(samples, cc, LS, precision = 1e-6, MaxIter = 50) {
+mvnc_ecm <- function(samples, cc, LS, precision = 1e-6, max_iter = 50) {
 
   validate_mvnc_input(samples, cc, LS)
+
+  if (!any(cc == 1)) {
+    fit <- mvn_ecm(samples, precision = precision, max_iter = max_iter)
+    fit$dadosPred <- samples
+    class(fit) <- "MVNC.ECM"
+    return(fit)
+  }
 
   p <- dim(samples)[1]
   q <- dim(samples)[2]
   n <- dim(samples)[3]
 
-  loglik <- numeric(MaxIter)
+  loglik <- numeric(max_iter)
   criterio <- Inf
   count <- 0L
 
@@ -592,7 +642,7 @@ mvnc_ecm <- function(samples, cc, LS, precision = 1e-6, MaxIter = 50) {
   Sigma <- diag(p)
   Vari  <- kronecker(Psi, Sigma)
 
-  while (criterio > precision && count < MaxIter) {
+  while (criterio > precision && count < max_iter) {
 
     count <- count + 1L
 
@@ -656,22 +706,31 @@ mvnc_ecm <- function(samples, cc, LS, precision = 1e-6, MaxIter = 50) {
   }
 
   loglik <- loglik[seq_len(count)]
+  diagnostics <- ecm_output_diagnostics(loglik, criterio)
 
-  if (count == MaxIter && criterio > precision) {
+  if (count == max_iter && criterio > precision) {
     warning("The algorithm stopped after reaching the maximum number of iterations without convergence.")
   }
 
   npar <- (p * q) + (p * (p + 1) / 2) + (q * (q + 1) / 2) - 1
-  BIC <- -2 * loglik[count] + npar * log(n)
+  BIC <- -2 * diagnostics$loglik + npar * log(n)
 
-  obj.out <- list(mu = mu,
+  obj.out <- list(M = mu,
+                  mu = mu,
                   Sigma = Sigma,
                   Psi = Psi,
                   dadosPred = dadosPred,
-                  loglik = loglik[count],
+                  loglik = diagnostics$loglik,
+                  loglik_history = diagnostics$loglik_history,
                   BIC = BIC,
+                  iterations = count,
                   iter = count,
-                  converged = (criterio <= precision))
+                  converged = (criterio <= precision),
+                  criterion = diagnostics$criterion,
+                  monotone = diagnostics$monotone,
+                  monotone_drops = diagnostics$monotone_drops,
+                  normalize_Psi = TRUE,
+                  npar = npar)
 
   class(obj.out) <- "MVNC.ECM"
   obj.out
@@ -683,21 +742,30 @@ mvnc_ecm <- function(samples, cc, LS, precision = 1e-6, MaxIter = 50) {
 #'
 #' @param samples Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param precision Positive scalar. Convergence tolerance.
-#' @param MaxIter Positive integer. Maximum number of ECM iterations.
+#' @param max_iter Positive integer. Maximum number of ECM iterations.
 #'
 #' @return An object of class `"MVN.ECM"` containing:
 #' \describe{
-#'   \item{mu}{Estimated location matrix.}
+#'   \item{M, mu}{Estimated location matrix. `M` is the canonical name and
+#'   `mu` is retained as a compatibility alias.}
 #'   \item{Sigma}{Estimated row covariance matrix.}
 #'   \item{Psi}{Estimated column covariance matrix.}
 #'   \item{loglik}{Final log-likelihood.}
+#'   \item{loglik_history}{Sequence of log-likelihood values.}
 #'   \item{BIC}{Bayesian information criterion.}
-#'   \item{iter}{Number of iterations performed.}
+#'   \item{iterations, iter}{Number of iterations performed. `iter` is a
+#'   compatibility alias.}
 #'   \item{converged}{Logical value indicating whether convergence was reached.}
+#'   \item{criterion}{Final relative log-likelihood change.}
+#'   \item{monotone}{Whether the likelihood history avoided decreases larger
+#'   than the numerical tolerance.}
+#'   \item{monotone_drops}{Recorded likelihood decreases beyond that tolerance.}
+#'   \item{normalize_Psi}{Always `TRUE`; `Psi` uses the normalized representation.}
+#'   \item{npar}{Parameter count used in the BIC.}
 #' }
 #'
 #' @keywords internal
-mvn_ecm <- function(samples, precision = 1e-6, MaxIter = 50) {
+mvn_ecm <- function(samples, precision = 1e-6, max_iter = 50) {
 
   validate_mvn_input(samples)
 
@@ -705,7 +773,7 @@ mvn_ecm <- function(samples, precision = 1e-6, MaxIter = 50) {
   q <- dim(samples)[2]
   n <- dim(samples)[3]
 
-  loglik   <- numeric(MaxIter)
+  loglik   <- numeric(max_iter)
   criterio <- Inf
   count    <- 0L
 
@@ -713,7 +781,7 @@ mvn_ecm <- function(samples, precision = 1e-6, MaxIter = 50) {
   Psi   <- diag(q)
   Sigma <- diag(p)
 
-  while (criterio > precision && count < MaxIter) {
+  while (criterio > precision && count < max_iter) {
 
     count <- count + 1L
 
@@ -722,7 +790,7 @@ mvn_ecm <- function(samples, precision = 1e-6, MaxIter = 50) {
 
     for (j in seq_len(n)) {
 
-      Xc <- samples[, , j] - mu
+      Xc <- matrix_sample_at(samples, j) - mu
       suma2 <- suma2 + t(Xc) %*% Sigma_inv %*% Xc
 
     }
@@ -733,7 +801,7 @@ mvn_ecm <- function(samples, precision = 1e-6, MaxIter = 50) {
 
     for (j in seq_len(n)) {
 
-      Xc <- samples[, , j] - mu
+      Xc <- matrix_sample_at(samples, j) - mu
       suma3 <- suma3 + Xc %*% Psi_inv %*% t(Xc)
 
     }
@@ -745,24 +813,57 @@ mvn_ecm <- function(samples, precision = 1e-6, MaxIter = 50) {
   }
 
   loglik <- loglik[seq_len(count)]
+  diagnostics <- ecm_output_diagnostics(loglik, criterio)
 
-  if (count == MaxIter && criterio > precision) {
+  if (count == max_iter && criterio > precision) {
 
     warning("The algorithm stopped after reaching the maximum number of iterations without convergence.")
 
   }
 
   npar <- (p * q) + (p * (p + 1) / 2) + (q * (q + 1) / 2) - 1
-  BIC <- -2 * loglik[count] + npar * log(n)
+  BIC <- -2 * diagnostics$loglik + npar * log(n)
 
-  obj.out <- list(mu = mu,
+  obj.out <- list(M = mu,
+                  mu = mu,
                   Sigma = Sigma,
                   Psi = Psi,
-                  loglik = loglik[count],
+                  loglik = diagnostics$loglik,
+                  loglik_history = diagnostics$loglik_history,
                   BIC = BIC,
+                  iterations = count,
                   iter = count,
-                  converged = (criterio <= precision))
+                  converged = (criterio <= precision),
+                  criterion = diagnostics$criterion,
+                  monotone = diagnostics$monotone,
+                  monotone_drops = diagnostics$monotone_drops,
+                  normalize_Psi = TRUE,
+                  npar = npar)
 
   class(obj.out) <- "MVN.ECM"
   obj.out
+}
+
+#' Monte Carlo study for the matrix-variate normal ECM estimator.
+#' @keywords internal
+#' @noRd
+mvn_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400),
+                            replications = 200,
+                            truth = default_mc_truth(),
+                            precision = 1e-6, max_iter = 50,
+                            seed = 123, verbose = FALSE, workers = NULL) {
+  run_model_monte_carlo("MVN", sample_sizes, replications, truth,
+                        precision, max_iter, seed, workers, NULL, NULL, verbose)
+}
+
+#' Monte Carlo study for the censored matrix-variate normal ECM estimator.
+#' @keywords internal
+#' @noRd
+mvnc_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400),
+                             replications = 200,
+                             truth = default_mc_truth(), cens = 0.2, Ind = 1,
+                             precision = 1e-6, max_iter = 50,
+                             seed = 123, verbose = FALSE, workers = NULL) {
+  run_model_monte_carlo("MVNC", sample_sizes, replications, truth,
+                        precision, max_iter, seed, workers, cens, Ind, verbose)
 }

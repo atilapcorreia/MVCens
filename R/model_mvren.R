@@ -14,7 +14,7 @@
 #   mvren_ecm()           ECM estimation
 #   mvren_mean()          theoretical mean
 #   mvren_covariances()   row/column covariance summaries
-#   mvren_monte_carlo()   simulation audit
+#   mvren_monte_carlo()   internal simulation wrapper
 #
 #   Required packages:
 #   mvtnorm, tmvtnorm
@@ -23,160 +23,6 @@
 # Internal numerical utilities
 # ---------------------------------------------------------------------------
 
-#' Vectorize a matrix
-#'
-#' Converts a matrix or matrix-like object into a vector using the default
-#' column-major ordering employed by R.
-#'
-#' @param B A matrix or matrix-like object to be vectorized.
-#'
-#' @return A vector containing the elements of `B` arranged column by column.
-#'
-#' @keywords internal
-#' @noRd
-mvren_vec <- function(B) {
-  as.vector(B)
-}
-
-#' Compute the Frobenius norm
-#'
-#' Computes the Frobenius norm of a matrix or matrix-like object by taking
-#' the square root of the sum of its squared elements.
-#'
-#' @param X A matrix or matrix-like object.
-#'
-#' @return A nonnegative numeric scalar representing the Frobenius norm of `X`.
-#'
-#' @keywords internal
-#' @noRd
-mvren_frobenius <- function(X) {
-  sqrt(sum(as.matrix(X)^2))
-}
-
-#' Compute the relative Frobenius error
-#'
-#' Computes the Frobenius norm of the difference between an estimated object
-#' and its true value, normalized by the Frobenius norm of the true value.
-#' When the norm of the true value is numerically zero, the unnormalized
-#' Frobenius error is returned.
-#'
-#' @param estimate A matrix or matrix-like object containing the estimated
-#'   values.
-#' @param truth A matrix or matrix-like object containing the reference or
-#'   true values.
-#'
-#' @return A nonnegative numeric scalar representing the relative Frobenius
-#'   error, or the absolute Frobenius error when `truth` has a numerically
-#'   zero norm.
-#'
-#' @keywords internal
-#' @noRd
-mvren_relative_frobenius <- function(estimate, truth) {
-  denom <- mvren_frobenius(truth)
-  if (denom <= .Machine$double.eps) {
-    return(mvren_frobenius(estimate - truth))
-  }
-  mvren_frobenius(estimate - truth) / denom
-}
-#' Check matrix symmetry
-#'
-#' Determines whether an object is a square matrix that is numerically
-#' symmetric within a specified tolerance. The comparison is performed with
-#' [all.equal()], so matrix attributes must also be compatible.
-#'
-#' @param X An object to be tested for symmetry.
-#' @param tol A nonnegative numeric scalar specifying the tolerance used when
-#'   comparing `X` with its transpose. The default is `1e-8`.
-#'
-#' @return A logical scalar indicating whether `X` is a square matrix and is
-#'   symmetric, with compatible attributes, within the specified tolerance.
-#'
-#' @keywords internal
-#' @noRd
-mvren_is_symmetric <- function(X, tol = 1e-8) {
-  is.matrix(X) &&
-    nrow(X) == ncol(X) &&
-    isTRUE(all.equal(X, t(X), tolerance = tol))
-}
-
-#' Check positive definiteness
-#'
-#' Determines whether an object is a numerically symmetric positive-definite
-#' matrix by examining its eigenvalues.
-#'
-#' @param X A matrix or matrix-like object to be tested.
-#' @param tol A positive numeric scalar specifying the minimum admissible
-#'   eigenvalue. The default is `1e-10`.
-#'
-#' @return A logical scalar indicating whether `X` is symmetric within the
-#'   numerical tolerance and all of its eigenvalues are finite and greater
-#'   than `tol`.
-#'
-#' @keywords internal
-#' @noRd
-mvren_is_posdef <- function(X, tol = 1e-10) {
-  X <- as.matrix(X)
-  if (!mvren_is_symmetric(X, tol = sqrt(tol))) {
-    return(FALSE)
-  }
-  values <- eigen((X + t(X)) / 2, symmetric = TRUE, only.values = TRUE)$values
-  all(is.finite(values)) && all(values > tol)
-}
-
-#' Assert positive definiteness
-#'
-#' Verifies that an object is a symmetric positive-definite matrix within a
-#' specified numerical tolerance. An error is raised when the condition is
-#' not satisfied.
-#'
-#' @param X A matrix or matrix-like object to be checked.
-#' @param name A character string identifying `X` in the error message.
-#' @param tol A positive numeric scalar specifying the minimum admissible
-#'   eigenvalue. The default is `1e-10`.
-#'
-#' @return Invisibly returns `TRUE` when `X` is symmetric positive definite.
-#'   Otherwise, the function terminates with an error.
-#'
-#' @keywords internal
-#' @noRd
-mvren_assert_posdef <- function(X, name, tol = 1e-10) {
-  if (!mvren_is_posdef(X, tol = tol)) {
-    stop(sprintf("%s must be symmetric positive definite.", name), call. = FALSE)
-  }
-  invisible(TRUE)
-}
-#' Regularize a matrix using a positive eigenvalue floor
-#'
-#' Symmetrizes a square finite matrix and replaces every eigenvalue smaller
-#' than `eig_floor` with `eig_floor`.
-#'
-#' @param S A square numeric matrix or matrix-like object to be regularized.
-#' @param eig_floor A numeric scalar specifying the minimum permitted
-#'   eigenvalue. The default is `1e-8`. A strictly positive value is required
-#'   for the result to be positive definite in exact arithmetic.
-#'
-#' @return A symmetric matrix whose eigenvalues are bounded below by
-#'   `eig_floor`. The result is positive definite when `eig_floor > 0`, subject
-#'   to numerical rounding; when `eig_floor = 0`, it may be only positive
-#'   semidefinite.
-#'
-#' @keywords internal
-#' @noRd
-mvren_make_posdef <- function(S, eig_floor = 1e-8) {
-  S <- as.matrix(S)
-  if (nrow(S) != ncol(S)) {
-    stop("The matrix to be regularized must be square.", call. = FALSE)
-  }
-  if (any(!is.finite(S))) {
-    stop("The matrix to be regularized contains non-finite values.", call. = FALSE)
-  }
-
-  S <- (S + t(S)) / 2
-  ev <- eigen(S, symmetric = TRUE)
-  values <- pmax(ev$values, eig_floor)
-  S_pd <- ev$vectors %*% diag(values, nrow = length(values)) %*% t(ev$vectors)
-  (S_pd + t(S_pd)) / 2
-}
 #' Prepare a numerical precision matrix
 #'
 #' Symmetrizes a matrix and determines whether its smallest eigenvalue is at
@@ -265,7 +111,7 @@ mvren_make_psd <- function(S, eig_floor = 0) {
 #' @noRd
 mvren_chol_lower <- function(S, name = "matrix") {
   S <- as.matrix(S)
-  mvren_assert_posdef(S, name)
+  matrix_assert_posdef(S, name)
   t(chol(S))
 }
 
@@ -353,6 +199,8 @@ mvren_validate_lambda <- function(lambda, p) {
 #' @param Psi A numeric `q` by `q` column covariance matrix.
 #' @param lambda An optional numeric vector of length `p` containing finite,
 #'   strictly positive rate parameters. When `NULL`, a vector of ones is used.
+#'   This low-level validator permits a general parameterization; the registered
+#'   MVREN API applies the additional unit-rate identifiability check.
 #' @param check_posdef A logical scalar indicating whether `Sigma` and `Psi`
 #'   should be checked for positive definiteness. The default is `TRUE`.
 #'
@@ -404,8 +252,8 @@ mvren_validate_parameters <- function(X = NULL,
   lambda <- mvren_validate_lambda(lambda, p)
 
   if (check_posdef) {
-    mvren_assert_posdef(Sigma, "Sigma")
-    mvren_assert_posdef(Psi, "Psi")
+    matrix_assert_posdef(Sigma, "Sigma")
+    matrix_assert_posdef(Psi, "Psi")
   }
 
   list(
@@ -636,62 +484,37 @@ mvren_truncated_moments <- function(mean,
   )
 }
 
-#' Apply an identifiability constraint to A and lambda
+#' Apply the fixed-rate identifiability convention to `A` and `lambda`
 #'
-#' Applies the selected identifiability convention to the latent-effect matrix
-#' and rate vector. Under the unit-row-norm constraint, each row of `A` is
-#' normalized to have Euclidean norm one and the corresponding component of
-#' `lambda` is rescaled to preserve the distribution of the latent
-#' contribution.
+#' MVREN fixes every row-specific exponential rate to one. This removes the
+#' scale non-identifiability between the latent-effect matrix `A` and the rate
+#' vector without normalizing rows of `A`.
 #'
 #' @param A A numeric matrix whose rows contain the latent-effect directions.
 #' @param lambda A numeric vector containing one finite, strictly positive rate
-#'   parameter for each row of `A`.
-#' @param mode A character string specifying the identifiability convention.
-#'   Available options are `"fixed"`, `"unit_A_rows"`, and `"unconstrained"`.
-#'   Only `"unit_A_rows"` modifies `A` and `lambda`.
-#' @param row_norm_floor A positive numeric scalar specifying the minimum
-#'   admissible row norm of `A` when `mode = "unit_A_rows"`. The default is
-#'   `1e-10`.
-#'
+#'   parameter for each row of `A`; it must contain only ones under the current
+#'   MVREN convention.
 #' @return A list containing:
 #' \describe{
-#'   \item{A}{The original or row-normalized latent-effect matrix.}
-#'   \item{lambda}{The original or correspondingly rescaled rate vector.}
+#'   \item{A}{The unchanged latent-effect matrix.}
+#'   \item{lambda}{A vector of ones, one for each row of `A`.}
 #' }
 #'
 #' @keywords internal
 #' @noRd
 mvren_identify_A_lambda <- function(A,
-                                    lambda,
-                                    mode = c("fixed", "unit_A_rows", "unconstrained"),
-                                    row_norm_floor = 1e-10) {
-  mode <- match.arg(mode)
+                                    lambda = NULL) {
   A <- as.matrix(A)
-  lambda <- mvren_validate_lambda(lambda, nrow(A))
-
-  if (mode != "unit_A_rows") {
-    return(list(A = A, lambda = lambda))
+  if (!is.numeric(A) || any(!is.finite(A))) {
+    stop("A must be a finite numeric matrix.", call. = FALSE)
   }
-
-  row_norms <- sqrt(rowSums(A^2))
-  if (any(!is.finite(row_norms)) || any(row_norms <= row_norm_floor)) {
-    stop(
-      paste0(
-        "A row is numerically zero, so lambda is not identifiable under the ",
-        "unit-row-norm constraint. Use lambda_mode = 'fixed' or provide better starting values."
-      ),
-      call. = FALSE
-    )
+  if (!is.null(lambda)) {
+    lambda <- mvren_validate_lambda(lambda, nrow(A))
+    if (any(abs(lambda - 1) > 0)) {
+      stop("MVREN identifiability requires every lambda_i to equal 1.", call. = FALSE)
+    }
   }
-
-  # The transformation (A_i, lambda_i) -> (A_i/c_i, lambda_i/c_i),
-  # with c_i = ||A_i||, preserves the distribution of W_i A_i while imposing
-  # ||A_i||_2 = 1.
-  list(
-    A = A / row_norms,
-    lambda = lambda / row_norms
-  )
+  list(A = A, lambda = rep(1, nrow(A)))
 }
 
 #' Construct initial values for the MVREN model
@@ -717,13 +540,6 @@ mvren_identify_A_lambda <- function(A,
 #' @param Psi_init An optional symmetric positive-definite `q` by `q` matrix
 #'   providing the initial column covariance matrix. When `NULL`, the identity
 #'   matrix is used.
-#' @param lambda_init An optional numeric vector of length `p` containing
-#'   finite, strictly positive initial rate parameters. When `NULL`, a vector
-#'   of ones is used.
-#' @param lambda_mode A character string specifying the identifiability
-#'   convention for `A` and `lambda`. Available options are `"fixed"`,
-#'   `"unit_A_rows"`, and `"unconstrained"`. Under `"unit_A_rows"`, the rows
-#'   of `A` are normalized and `lambda` is correspondingly rescaled.
 #' @param skew_scale A positive numeric scalar controlling the Euclidean norm
 #'   assigned to each automatically initialized row of `A`. The default is
 #'   `0.5`.
@@ -744,17 +560,14 @@ mvren_initial_values <- function(X,
                                  A_init = NULL,
                                  Sigma_init = NULL,
                                  Psi_init = NULL,
-                                 lambda_init = NULL,
-                                 lambda_mode = c("fixed", "unit_A_rows", "unconstrained"),
                                  skew_scale = 0.5) {
   X <- mvren_validate_sample_array(X)
-  lambda_mode <- match.arg(lambda_mode)
 
   p <- dim(X)[1]
   q <- dim(X)[2]
   n <- dim(X)[3]
 
-  lambda <- if (is.null(lambda_init)) rep(1, p) else mvren_validate_lambda(lambda_init, p)
+  lambda <- rep(1, p)
   Xbar <- apply(X, c(1, 2), mean)
 
   if (is.null(A_init)) {
@@ -786,7 +599,7 @@ mvren_initial_values <- function(X,
     stop("A_init must have dimensions p x q.", call. = FALSE)
   }
 
-  identified <- mvren_identify_A_lambda(A, lambda, mode = lambda_mode)
+  identified <- mvren_identify_A_lambda(A, lambda)
   A <- identified$A
   lambda <- identified$lambda
 
@@ -819,17 +632,29 @@ mvren_initial_values <- function(X,
 #'
 #' Computes the mean matrix of a matrix-variate row exponential-normal
 #' distribution from its location matrix, latent-effect matrix, and
-#' row-specific exponential rate parameters.
+#' row-specific exponential rate parameters. In this model, independent
+#' exponential latent variables produce row-specific mean shifts through
+#' `X = M + W A + V`, where `W` is diagonal and `V` is matrix-normal noise.
 #'
 #' @param M A numeric `p` by `q` location matrix.
 #' @param A A numeric `p` by `q` latent-effect matrix.
 #' @param lambda An optional numeric vector of length `p` containing finite,
 #'   strictly positive exponential rate parameters. When `NULL`, a vector of
-#'   ones is used.
+#'   ones is used. The high-level MVREN API (`mv_random()` and `mv_fit()`)
+#'   fixes this vector to ones for identifiability; non-unit values here are
+#'   supported only to evaluate a supplied general parameterization.
 #'
 #' @return A numeric `p` by `q` matrix containing the mean of the MVREN
 #'   distribution.
+#' @details For the identified model used by `mv_random()` and `mv_fit()`, use
+#'   the default unit-rate vector. The optional argument is retained here to
+#'   evaluate moments for an explicitly supplied general parameterization.
 #'
+#' @examples
+#' M <- matrix(0, 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' mvren_mean(M, A)
+#' @family MVCens MVREN functions
 #' @export
 mvren_mean <- function(M, A, lambda = NULL) {
   M <- as.matrix(M)
@@ -849,7 +674,10 @@ mvren_mean <- function(M, A, lambda = NULL) {
 #' Computes the row and column covariance summaries associated with a
 #' matrix-variate row exponential-normal distribution from its latent-effect
 #' matrix, row and column covariance matrices, and row-specific exponential
-#' rate parameters.
+#' rate parameters. These summaries combine the separable matrix-normal
+#' covariance contribution with the variability induced by independent
+#' exponential row effects. They describe row-wise and column-wise second
+#' moments of the matrix-valued observation, not a fitted model.
 #'
 #' @param M A numeric `p` by `q` location matrix. The covariance summaries do
 #'   not depend on `M`; it is used to establish and validate the model
@@ -861,7 +689,8 @@ mvren_mean <- function(M, A, lambda = NULL) {
 #'   matrix.
 #' @param lambda An optional numeric vector of length `p` containing finite,
 #'   strictly positive exponential rate parameters. When `NULL`, a vector of
-#'   ones is used.
+#'   ones is used. The high-level MVREN API fixes this vector to ones; non-unit
+#'   values here are for evaluating a supplied general parameterization.
 #'
 #' @return A list containing:
 #' \describe{
@@ -876,7 +705,19 @@ mvren_mean <- function(M, A, lambda = NULL) {
 #'   (\mathbf{X}-\mathbb{E}(\mathbf{X}))
 #'   \right]}.}
 #' }
+#' @details For the identified model used by `mv_random()` and `mv_fit()`, use
+#'   the default unit-rate vector. The optional argument is retained here to
+#'   evaluate covariance summaries for an explicitly supplied general
+#'   parameterization.
 #'
+#' @examples
+#' M <- matrix(0, 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' mvren_covariances(
+#'   M = M, A = A,
+#'   Sigma = diag(3), Psi = diag(4)
+#' )
+#' @family MVCens MVREN functions
 #' @export
 mvren_covariances <- function(M, A, Sigma, Psi, lambda = NULL) {
   pars <- mvren_validate_parameters(
@@ -902,7 +743,11 @@ mvren_covariances <- function(M, A, Sigma, Psi, lambda = NULL) {
 #' Density of the matrix-variate row exponential-normal distribution
 #'
 #' Computes the density or log-density of the matrix-variate row
-#' exponential-normal (MVREN) distribution at a matrix-valued observation.
+#' exponential-normal (MVREN) distribution at one `p` by `q` matrix-valued
+#' observation. MVREN replaces a common latent shift with independent
+#' row-specific exponential variables, so each row can have its own asymmetric
+#' mean-shift magnitude while the Gaussian component keeps separable row and
+#' column covariance.
 #' The MVREN model extends the matrix-variate normal distribution by
 #' introducing independent, nonnegative row-specific latent effects, allowing
 #' different rows of the observation matrix to exhibit distinct directions
@@ -917,7 +762,9 @@ mvren_covariances <- function(M, A, Sigma, Psi, lambda = NULL) {
 #'   matrix.
 #' @param lambda An optional numeric vector of length `p` containing finite,
 #'   strictly positive exponential rate parameters. When `NULL`, a vector of
-#'   ones is used.
+#'   ones is used. The high-level MVREN API fixes this vector to ones; non-unit
+#'   values here are supported only to evaluate a supplied general
+#'   parameterization.
 #' @param log A logical scalar indicating whether the log-density should be
 #'   returned. The default is `FALSE`.
 #' @param eig_floor A positive numeric scalar specifying the minimum numerical
@@ -930,7 +777,21 @@ mvren_covariances <- function(M, A, Sigma, Psi, lambda = NULL) {
 #'
 #' @return A numeric scalar containing the MVREN density evaluated at `X`.
 #'   When `log = TRUE`, the corresponding log-density is returned.
+#' @details The identified MVREN model used by `mv_random()` and `mv_fit()`
+#'   fixes every `lambda_i` to one. This lower-level density evaluator retains
+#'   the optional rate vector so that a supplied general parameterization can
+#'   be evaluated explicitly.
 #'
+#' @examples
+#' X <- matrix(seq(-0.2, 0.9, length.out = 12), 3, 4)
+#' M <- matrix(0, 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' dmvren(
+#'   X = X, M = M, A = A,
+#'   Sigma = diag(3), Psi = diag(4)
+#' )
+#' @family MVCens density functions
+#' @family MVCens MVREN functions
 #' @export
 dmvren <- function(X,
                    M,
@@ -984,6 +845,8 @@ dmvren <- function(X,
 #' Evaluates the observed-data log-likelihood of a sample from the
 #' matrix-variate row exponential-normal (MVREN) distribution by summing the
 #' individual log-density contributions of the matrix-valued observations.
+#' Each slice `X_array[, , i]` is evaluated by [dmvren()] under the
+#' row-specific exponential latent-effect representation.
 #'
 #' @param X_array A numeric three-dimensional array with dimensions `p` by
 #'   `q` by `n`, containing `n` matrix-valued observations.
@@ -995,7 +858,9 @@ dmvren <- function(X,
 #'   matrix.
 #' @param lambda An optional numeric vector of length `p` containing finite,
 #'   strictly positive exponential rate parameters. When `NULL`, a vector of
-#'   ones is used.
+#'   ones is used. The high-level MVREN API fixes this vector to ones; non-unit
+#'   values here are supported only to evaluate a supplied general
+#'   parameterization.
 #' @param eig_floor A positive numeric scalar specifying the minimum numerical
 #'   eigenvalue allowed for the matrix `Q` used in each density evaluation.
 #'   The default is `1e-10`.
@@ -1005,7 +870,21 @@ dmvren <- function(X,
 #'
 #' @return A numeric scalar containing the observed-data log-likelihood of the
 #'   supplied sample.
+#' @details The identified MVREN model used by `mv_fit()` fixes every
+#'   `lambda_i` to one. This lower-level evaluator retains the optional rate
+#'   vector for explicit likelihood calculations under a supplied general
+#'   parameterization.
 #'
+#' @examples
+#' x <- array(seq(-0.2, 2.1, length.out = 24), dim = c(3, 4, 2))
+#' M <- matrix(0, 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' loglik_mvren(
+#'   x, M = M, A = A,
+#'   Sigma = diag(3), Psi = diag(4)
+#' )
+#' @family MVCens likelihood functions
+#' @family MVCens MVREN functions
 #' @export
 loglik_mvren <- function(X_array,
                          M,
@@ -1110,25 +989,18 @@ mvren_expected_crossproducts <- function(Y,
 #'   `q` by `n`.
 #' @param max_iter A positive integer specifying the maximum number of ECM
 #'   iterations. The default is `200`.
-#' @param tol A positive numeric scalar specifying the relative log-likelihood
+#' @param precision A positive numeric scalar specifying the relative log-likelihood
 #'   convergence tolerance. The default is `1e-6`.
 #' @param normalize_Psi A logical scalar indicating whether `Psi` should be
 #'   rescaled toward a unit-determinant representation. Eigenvalue flooring
 #'   applied after rescaling may produce a small numerical deviation from
 #'   `det(Psi) = 1`. The default is `TRUE`.
-#' @param lambda_mode A character string specifying the treatment of the rate
-#'   vector. `"fixed"` keeps `lambda` fixed; `"unit_A_rows"` estimates
-#'   `lambda` and normalizes every row of `A` to unit Euclidean norm; and
-#'   `"unconstrained"` estimates `lambda` without a scale-identifying
-#'   restriction and is therefore non-identifiable.
 #' @param M_init An optional `p` by `q` starting value for `M`.
 #' @param A_init An optional `p` by `q` starting value for `A`.
 #' @param Sigma_init An optional positive-definite `p` by `p` starting value
 #'   for `Sigma`.
 #' @param Psi_init An optional positive-definite `q` by `q` starting value for
 #'   `Psi`.
-#' @param lambda_init An optional positive vector of length `p` containing the
-#'   initial rate parameters.
 #' @param verbose A logical scalar indicating whether iteration information
 #'   should be printed. The default is `TRUE`.
 #' @param eig_floor A positive numeric scalar used as an eigenvalue floor in
@@ -1145,6 +1017,10 @@ mvren_expected_crossproducts <- function(Y,
 #' @param moment_max_retries A positive integer specifying the maximum number
 #'   of repeated attempts used to obtain valid truncated-normal moments. The
 #'   default is `4L`.
+#' @param progress_callback Optional function called after initialization and
+#'   after every completed ECM iteration with arguments `iteration`,
+#'   `max_iter`, and `criterion`. Callback failures are ignored so monitoring
+#'   cannot alter the scientific fit.
 #'
 #' @return An object of class `"mvren_fit"`, represented by a list containing:
 #' \describe{
@@ -1153,7 +1029,7 @@ mvren_expected_crossproducts <- function(Y,
 #'   \item{loglik_history}{The sequence of accepted log-likelihood values.}
 #'   \item{iterations}{The number of ECM iterations performed.}
 #'   \item{BIC}{The Bayesian information criterion computed by the function.}
-#'   \item{converged}{A logical indicator of convergence under `tol`.}
+#'   \item{converged}{A logical indicator of convergence under `precision`.}
 #'   \item{criterion}{The final relative log-likelihood change.}
 #'   \item{monotone}{A logical indicator of whether decreases larger than
 #'   `monotone_tol` were avoided.}
@@ -1163,7 +1039,7 @@ mvren_expected_crossproducts <- function(Y,
 #'   \item{rejected_updates}{The number of full update sequences rejected
 #'   after unsuccessful backtracking.}
 #'   \item{normalize_Psi}{The requested covariance-identification setting.}
-#'   \item{lambda_mode}{The selected rate-identification mode.}
+#'   \item{lambda_mode}{Always `"fixed"`, retained as an explicit diagnostic.}
 #'   \item{npar}{The parameter count used in the BIC calculation.}
 #' }
 #'
@@ -1171,7 +1047,8 @@ mvren_expected_crossproducts <- function(Y,
 #' In the E-step, each latent vector is represented by a multivariate normal
 #' distribution with covariance `Q^{-1}` and mean
 #' `Q^{-1}(b_i - lambda)`, truncated to the positive orthant. The subsequent
-#' CM-steps update `M`, `A`, `Psi`, `Sigma`, and, when requested, `lambda`.
+#' CM-steps update `M`, `A`, `Psi`, and `Sigma`; the rate vector is fixed at
+#' one for every row throughout the fit.
 #' Candidate updates that reduce the observed-data log-likelihood beyond
 #' `monotone_tol` are subjected to step halving. Numerical eigenvalue flooring
 #' can make the implemented procedure a stabilized ECM-type algorithm rather
@@ -1180,37 +1057,25 @@ mvren_expected_crossproducts <- function(Y,
 #' @keywords internal
 mvren_ecm <- function(X,
                       max_iter = 200,
-                      tol = 1e-6,
+                      precision = 1e-6,
                       normalize_Psi = TRUE,
-                      lambda_mode = c("fixed", "unit_A_rows", "unconstrained"),
                       M_init = NULL,
                       A_init = NULL,
                       Sigma_init = NULL,
                       Psi_init = NULL,
-                      lambda_init = NULL,
                       verbose = TRUE,
                       eig_floor = 1e-8,
                       q_policy = c("warn", "strict", "regularize"),
                       monotone_tol = 1e-7,
                       max_backtracks = 12L,
-                      moment_max_retries = 4L) {
+                      moment_max_retries = 4L,
+                      progress_callback = NULL) {
   X <- mvren_validate_sample_array(X)
-  lambda_mode <- match.arg(lambda_mode)
   q_policy <- match.arg(q_policy)
   max_backtracks <- as.integer(max_backtracks)
   if (length(max_backtracks) != 1L || !is.finite(max_backtracks) ||
       max_backtracks < 0L) {
     stop("max_backtracks must be a non-negative integer.", call. = FALSE)
-  }
-
-  if (lambda_mode == "unconstrained") {
-    warning(
-      paste0(
-        "Estimating A and lambda without a scale constraint is non-identifiable. ",
-        "Prefer lambda_mode = 'fixed' or 'unit_A_rows'."
-      ),
-      call. = FALSE
-    )
   }
 
   p <- dim(X)[1]
@@ -1222,9 +1087,7 @@ mvren_ecm <- function(X,
     M_init = M_init,
     A_init = A_init,
     Sigma_init = Sigma_init,
-    Psi_init = Psi_init,
-    lambda_init = lambda_init,
-    lambda_mode = lambda_mode
+    Psi_init = Psi_init
   )
 
   M <- init$M
@@ -1259,11 +1122,22 @@ mvren_ecm <- function(X,
   rejected_updates <- 0L
   update_rejected <- FALSE
 
-  while (criterion > tol && count < max_iter) {
+  report_progress <- function(iteration, criterion_value) {
+    if (!is.function(progress_callback)) return(invisible(NULL))
+    try(progress_callback(
+      iteration = as.integer(iteration),
+      max_iter = as.integer(max_iter),
+      criterion = as.numeric(criterion_value)
+    ), silent = TRUE)
+    invisible(NULL)
+  }
+  report_progress(0L, criterion)
+
+  while (criterion > precision && count < max_iter) {
     count <- count + 1L
 
-    Sigma <- mvren_make_posdef(Sigma, eig_floor = eig_floor)
-    Psi <- mvren_make_posdef(Psi, eig_floor = eig_floor)
+    Sigma <- matrix_make_posdef(Sigma, eig_floor = eig_floor)
+    Psi <- matrix_make_posdef(Psi, eig_floor = eig_floor)
     M_old <- M
     A_old <- A
     Sigma_old <- Sigma
@@ -1316,7 +1190,7 @@ mvren_ecm <- function(X,
       right <- right + Wbar %*% Sigma_inv %*% Y
     }
 
-    left <- mvren_make_posdef(left, eig_floor = eig_floor)
+    left <- matrix_make_posdef(left, eig_floor = eig_floor)
     A_new <- mvren_chol_solve(left, right, "A update")
 
     # CM-step 3: update Psi using the expected residual column crossproducts.
@@ -1335,14 +1209,14 @@ mvren_ecm <- function(X,
       )
       Psi_new <- Psi_new + crossproducts$column
     }
-    Psi_new <- mvren_make_posdef(Psi_new / (n * p), eig_floor = eig_floor)
+    Psi_new <- matrix_make_posdef(Psi_new / (n * p), eig_floor = eig_floor)
 
     if (normalize_Psi) {
       scale_Psi <- det(Psi_new)^(1 / q)
       if (!is.finite(scale_Psi) || scale_Psi <= 0) {
         stop("The Psi update has a non-positive determinant.", call. = FALSE)
       }
-      Psi_new <- mvren_make_posdef(Psi_new / scale_Psi, eig_floor = eig_floor)
+      Psi_new <- matrix_make_posdef(Psi_new / scale_Psi, eig_floor = eig_floor)
     }
 
     # CM-step 4: update Sigma conditional on the updated Psi.
@@ -1359,27 +1233,10 @@ mvren_ecm <- function(X,
       )
       Sigma_new <- Sigma_new + crossproducts$row
     }
-    Sigma_new <- mvren_make_posdef(Sigma_new / (n * q), eig_floor = eig_floor)
+    Sigma_new <- matrix_make_posdef(Sigma_new / (n * q), eig_floor = eig_floor)
 
-    # CM-step 5: update lambda when requested.
-    if (lambda_mode == "fixed") {
-      lambda_new <- lambda
-    } else {
-      sum_wbar <- Reduce(`+`, wbar_list)
-      if (any(!is.finite(sum_wbar)) || any(sum_wbar <= 0)) {
-        stop("The lambda CM-step received invalid conditional latent means.", call. = FALSE)
-      }
-      lambda_new <- n / sum_wbar
-    }
-
-    # Apply the row-norm identifying restriction only after all CM updates.
-    identified <- mvren_identify_A_lambda(
-      A = A_new,
-      lambda = lambda_new,
-      mode = lambda_mode
-    )
-    A_new <- identified$A
-    lambda_new <- identified$lambda
+    # The fixed-rate convention is the sole MVREN identifiability constraint.
+    lambda_new <- rep(1, p)
 
     evaluate_candidate <- function(M_value, A_value, Sigma_value, Psi_value,
                                    lambda_value) {
@@ -1429,19 +1286,14 @@ mvren_ecm <- function(X,
         step_size <- 2^(-backtrack)
         M_try <- M_old + step_size * (M_new - M_old)
         A_try <- A_old + step_size * (A_new - A_old)
-        Sigma_try <- mvren_make_posdef(
+        Sigma_try <- matrix_make_posdef(
           Sigma_old + step_size * (Sigma_new - Sigma_old), eig_floor
         )
-        Psi_try <- mvren_make_posdef(
+        Psi_try <- matrix_make_posdef(
           Psi_old + step_size * (Psi_new - Psi_old), eig_floor
         )
         if (normalize_Psi) Psi_try <- Psi_try / det(Psi_try)^(1 / q)
-        lambda_try <- lambda_old + step_size * (lambda_new - lambda_old)
-        identified_try <- mvren_identify_A_lambda(
-          A_try, lambda_try, mode = lambda_mode
-        )
-        A_try <- identified_try$A
-        lambda_try <- identified_try$lambda
+        lambda_try <- rep(1, p)
         loglik_try <- evaluate_candidate(
           M_try, A_try, Sigma_try, Psi_try, lambda_try
         )
@@ -1485,6 +1337,7 @@ mvren_ecm <- function(X,
     lambda <- lambda_new
     current_loglik <- new_loglik
     loglik_history <- c(loglik_history, current_loglik)
+    report_progress(count, criterion)
 
     if (verbose) {
       cat(sprintf(
@@ -1497,7 +1350,7 @@ mvren_ecm <- function(X,
     if (update_rejected) break
   }
 
-  converged <- criterion <= tol && !update_rejected
+  converged <- criterion <= precision && !update_rejected
   if (!converged && count == max_iter) {
     warning(
       "The ECM algorithm reached max_iter before satisfying the convergence criterion.",
@@ -1508,14 +1361,7 @@ mvren_ecm <- function(X,
   covariance_parameters <-
     p * (p + 1) / 2 + q * (q + 1) / 2 - as.integer(normalize_Psi)
 
-  if (lambda_mode == "fixed") {
-    npar <- 2 * p * q + covariance_parameters
-  } else if (lambda_mode == "unit_A_rows") {
-    # p row-norm restrictions on A offset the p estimated rate parameters.
-    npar <- 2 * p * q + covariance_parameters
-  } else {
-    npar <- 2 * p * q + covariance_parameters + p
-  }
+  npar <- 2 * p * q + covariance_parameters
 
   BIC <- -2 * current_loglik + npar * log(n)
 
@@ -1536,7 +1382,7 @@ mvren_ecm <- function(X,
                   step_sizes = step_sizes,
                   rejected_updates = rejected_updates,
                   normalize_Psi = normalize_Psi,
-                  lambda_mode = lambda_mode,
+                  lambda_mode = "fixed",
                   npar = npar)
 
     class(obj.out) <- "MVREN.ECM"
@@ -1556,22 +1402,24 @@ mvren_ecm <- function(X,
 #'
 #' @keywords internal
 #' @noRd
+#' @exportS3Method print mvren_fit
 print.mvren_fit <- function(x, ...) {
   cat("Matrix-Variate Row Exponential-Normal ECM fit\n")
   cat("Iterations:", x$iterations, "\n")
   cat("Converged:", x$converged, "\n")
   cat("Log-likelihood:", format(x$loglik, digits = 8), "\n")
   cat("BIC:", format(x$BIC, digits = 8), "\n")
-  cat("Lambda mode:", x$lambda_mode, "\n")
+  cat("Rate identification: lambda_i = 1 for all rows\n")
   cat("lambda:", paste(format(x$lambda, digits = 6), collapse = ", "), "\n")
   invisible(x)
 }
 
 #' Predefined parameter set for the MVREN distribution
 #'
-#' Constructs a predefined collection of parameters for the matrix-variate
-#' row exponential-normal distribution, intended for simulation studies,
-#' numerical experiments, and reproducible examples.
+#' Constructs a predefined collection of `3` by `4` parameters for the MVREN
+#' Monte Carlo setting described in the row exponential-normal article. The
+#' setting is intended for simulation studies, numerical experiments, and
+#' reproducible examples involving row-specific exponential latent effects.
 #'
 #' @param normalize_Psi Logical scalar indicating whether \code{Psi} should be
 #'   normalized to have determinant one. The corresponding reciprocal scaling
@@ -1580,7 +1428,17 @@ print.mvren_fit <- function(x, ...) {
 #'
 #' @return A list containing the matrices \code{M}, \code{A}, \code{Sigma},
 #'   and \code{Psi}, together with the exponential-rate vector \code{lambda}.
+#' @details The returned parameter set uses the identified MVREN convention
+#'   `lambda_i = 1` for every row. The `normalize_Psi` option concerns only the
+#'   separate row/column covariance scale constraint; rows of `A` are not
+#'   normalized. The parameter values are provided as a reproducible reference
+#'   set; they are not fitted or estimated by this function.
 #'
+#' @examples
+#' pars <- mvren_article_parameters()
+#' names(pars)
+#' det(pars$Psi)
+#' @family MVCens MVREN functions
 #' @export
 mvren_article_parameters <- function(normalize_Psi = TRUE) {
   M <- matrix(c(
@@ -1655,10 +1513,10 @@ mvren_article_parameters <- function(normalize_Psi = TRUE) {
 #' @noRd
 mvren_fit_diagnostics <- function(fit, truth) {
   data.frame(
-    err_M = mvren_relative_frobenius(fit$M, truth$M),
-    err_A = mvren_relative_frobenius(fit$A, truth$A),
-    err_Sigma = mvren_relative_frobenius(fit$Sigma, truth$Sigma),
-    err_Psi = mvren_relative_frobenius(fit$Psi, truth$Psi),
+    err_M = relative_frobenius_error(fit$M, truth$M),
+    err_A = relative_frobenius_error(fit$A, truth$A),
+    err_Sigma = relative_frobenius_error(fit$Sigma, truth$Sigma),
+    err_Psi = relative_frobenius_error(fit$Psi, truth$Psi),
     err_lambda = sqrt(sum((fit$lambda - truth$lambda)^2)) /
       max(sqrt(sum(truth$lambda^2)), .Machine$double.eps),
     loglik = fit$loglik,
@@ -1684,17 +1542,16 @@ mvren_fit_diagnostics <- function(fit, truth) {
 #' @param truth A list containing the data-generating MVREN parameters `M`,
 #'   `A`, `Sigma`, `Psi`, and `lambda`. By default, the parameters returned by
 #'   `mvren_article_parameters()` are used.
-#' @param lambda_mode A character string specifying the identifiability
-#'   convention used when fitting the model. Supported values are `"fixed"`,
-#'   `"unit_A_rows"`, and `"unconstrained"`. The default is `"fixed"`.
 #' @param max_iter A positive integer specifying the maximum number of ECM
 #'   iterations allowed for each fitted model. The default is `200`.
-#' @param tol A positive numeric scalar specifying the convergence tolerance
+#' @param precision A positive numeric scalar specifying the convergence tolerance
 #'   passed to the ECM algorithm. The default is `1e-6`.
 #' @param seed An integer used to initialize the random-number generator,
 #'   ensuring reproducibility. The default is `123`.
 #' @param verbose A logical scalar indicating whether simulation progress and
 #'   ECM output should be printed. The default is `FALSE`.
+#' @param workers Number of worker processes used for independent replications.
+#'   Defaults to all logical CPU threads available to the host.
 #'
 #' @return A list containing:
 #' \describe{
@@ -1708,19 +1565,20 @@ mvren_fit_diagnostics <- function(fit, truth) {
 #'   \item{generating_truth}{The parameter set used to generate the simulated
 #'   observations.}
 #'   \item{comparison_truth}{The parameter set used to compute estimation
-#'   errors. Under `lambda_mode = "unit_A_rows"`, this contains the
-#'   identifiability-adjusted values of `A` and `lambda`.}
+#'   errors. The rate vector is fixed to one in both the generating and fitted
+#'   parameter sets.}
 #' }
 #'
-#' @export
+#' @keywords internal
+#' @noRd
 mvren_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400, 800, 1600),
                               replications = 200,
                               truth = mvren_article_parameters(),
-                              lambda_mode = "fixed",
                               max_iter = 200,
-                              tol = 1e-6,
+                              precision = 1e-6,
                               seed = 123,
-                              verbose = FALSE) {
+                              verbose = FALSE,
+                              workers = NULL) {
   if (any(sample_sizes <= 0L) || replications <= 0L) {
     stop("sample_sizes and replications must be positive.", call. = FALSE)
   }
@@ -1732,58 +1590,33 @@ mvren_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400, 800, 1600),
     Psi = truth$Psi,
     lambda = truth$lambda
   )
-
-  comparison_truth <- truth
-  if (lambda_mode == "unit_A_rows") {
-    identified_truth <- mvren_identify_A_lambda(
-      A = truth$A,
-      lambda = truth$lambda,
-      mode = "unit_A_rows"
-    )
-    comparison_truth$A <- identified_truth$A
-    comparison_truth$lambda <- identified_truth$lambda
+  if (is.null(truth$lambda)) {
+    truth$lambda <- rep(1, nrow(truth$M))
+  }
+  if (any(abs(truth$lambda - 1) > .Machine$double.eps)) {
+    stop("MVREN requires every truth$lambda_i to equal 1.", call. = FALSE)
   }
 
-  set.seed(seed)
-  rows <- vector("list", length(sample_sizes) * replications)
-  index <- 0L
+  comparison_truth <- truth
 
-  for (n in sample_sizes) {
-    for (replication in seq_len(replications)) {
-      index <- index + 1L
-
-      if (verbose) {
-        cat(sprintf(
-          "[MVREN Monte Carlo] n = %d, replication = %d/%d\n",
-          n,
-          replication,
-          replications
-        ))
-      }
-
-      X <- rmvren(
-        n = n,
-        M = truth$M,
-        A = truth$A,
-        Sigma = truth$Sigma,
-        Psi = truth$Psi,
-        lambda = truth$lambda
-      )
-
-      fit <- tryCatch(
-        mvren_ecm(
-          X = X,
-          max_iter = max_iter,
-          tol = tol,
-          lambda_mode = lambda_mode,
-          lambda_init = truth$lambda,
-          verbose = verbose
-        ),
-        error = function(e) e
-      )
-
-      if (inherits(fit, "error")) {
-        rows[[index]] <- data.frame(
+  tasks <- lapply(sample_sizes, function(n) {
+    lapply(seq_len(replications), function(replication) {
+      list(n = n, replication = replication)
+    })
+  })
+  tasks <- unlist(tasks, recursive = FALSE)
+  rows <- run_independent_tasks(tasks, function(task) {
+    n <- task$n
+    replication <- task$replication
+    X <- rmvren(n = n, M = truth$M, A = truth$A, Sigma = truth$Sigma,
+                Psi = truth$Psi, lambda = truth$lambda)
+    fit <- tryCatch(
+      mvren_ecm(X = X, max_iter = max_iter, precision = precision,
+                verbose = FALSE),
+      error = function(e) e
+    )
+    if (inherits(fit, "error")) {
+        data.frame(
           n = n,
           replication = replication,
           err_M = NA_real_,
@@ -1799,16 +1632,15 @@ mvren_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400, 800, 1600),
           det_Psi = NA_real_,
           error = conditionMessage(fit)
         )
-      } else {
+    } else {
         diagnostics <- mvren_fit_diagnostics(fit, comparison_truth)
-        rows[[index]] <- cbind(
+        cbind(
           data.frame(n = n, replication = replication),
           diagnostics,
           data.frame(error = NA_character_)
         )
-      }
     }
-  }
+  }, seed = seed, workers = workers)
 
   results <- do.call(rbind, rows)
   summary <- do.call(rbind, lapply(split(results, results$n), function(df) {
@@ -1851,9 +1683,47 @@ mvren_run_example <- function(seed = 123L, n = 100L, max_iter = 200L,
   X <- rmvren(n = n, M = pars$M, A = pars$A, Sigma = pars$Sigma,
               Psi = pars$Psi, lambda = pars$lambda)
   fit <- mvren_ecm(
-    X, max_iter = max_iter, lambda_mode = "fixed",
-    lambda_init = pars$lambda, verbose = verbose
+    X, max_iter = max_iter, verbose = verbose
   )
   print(fit)
   invisible(fit)
+}
+
+mvcens_spec_mvren <- function() {
+  new_model_spec(
+    name = "MVREN",
+    validate = function(X = NULL, M = NULL, A = NULL, Sigma = NULL,
+                        Psi = NULL, lambda = NULL, mode, ...) {
+      if (mode == "fit") mvren_validate_sample_array(X)
+      else {
+        pars <- mvren_validate_parameters(M = M, A = A, Sigma = Sigma,
+                                          Psi = Psi, lambda = lambda)
+        if (any(abs(pars$lambda - 1) > .Machine$double.eps)) {
+          stop("MVREN requires every lambda_i to equal 1 for identifiability.",
+               call. = FALSE)
+        }
+      }
+      invisible(TRUE)
+    },
+    loglik = loglik_mvren,
+    generate = function(n, M, A, Sigma, Psi, lambda = NULL,
+                        return_latent = FALSE, ...) {
+      rmvren(n, M, A, Sigma, Psi, lambda = lambda,
+             return_latent = return_latent)
+    },
+    parameter_count = function(p, q) model_parameter_count(p, q, skew = TRUE, extra = p),
+    fit = function(X, cc = NULL, LS = NULL, precision, max_iter,
+                   M_init = NULL, A_init = NULL, Sigma_init = NULL,
+                   Psi_init = NULL,
+                   q_policy = c("warn", "strict", "regularize"),
+                   verbose = FALSE, progress_callback = NULL) {
+      mvren_ecm(
+        X, max_iter = max_iter, precision = precision,
+        M_init = M_init, A_init = A_init,
+        Sigma_init = Sigma_init, Psi_init = Psi_init,
+        q_policy = match.arg(q_policy), verbose = verbose,
+        progress_callback = progress_callback
+      )
+    }
+  )
 }

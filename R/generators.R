@@ -5,15 +5,15 @@
 #'
 #' @param n Positive integer. Number of matrix observations to generate.
 #' @param M Numeric matrix of dimension \eqn{p \times q}. Location matrix.
-#' @param U Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
-#' @param V Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
+#' @param Sigma Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
+#' @param Psi Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
 #' @param A Optional numeric matrix of dimension \eqn{p \times q}. Skewness matrix.
 #' @param require_A Logical. If `TRUE`, the function requires `A` to be supplied.
 #'
 #' @return Invisibly returns `TRUE` if all inputs are valid.
 #'
 #' @keywords internal
-validate_matrix_generator_inputs <- function(n, M, U, V, A = NULL, require_A = FALSE) {
+validate_matrix_generator_inputs <- function(n, M, Sigma, Psi, A = NULL, require_A = FALSE) {
   if (!is.numeric(n) || length(n) != 1L || !is.finite(n) || n <= 0 || n != as.integer(n)) {
     stop("'n' must be a positive integer.")
   }
@@ -22,19 +22,19 @@ validate_matrix_generator_inputs <- function(n, M, U, V, A = NULL, require_A = F
     stop("'M' must be a matrix.")
   }
 
-  if (!is.matrix(U) || nrow(U) != ncol(U)) {
-    stop("'U' must be a square matrix.")
+  if (!is.matrix(Sigma) || nrow(Sigma) != ncol(Sigma)) {
+    stop("'Sigma' must be a square matrix.")
   }
 
-  if (!is.matrix(V) || nrow(V) != ncol(V)) {
-    stop("'V' must be a square matrix.")
+  if (!is.matrix(Psi) || nrow(Psi) != ncol(Psi)) {
+    stop("'Psi' must be a square matrix.")
   }
 
-  p <- nrow(U)
-  q <- ncol(V)
+  p <- nrow(Sigma)
+  q <- ncol(Psi)
 
   if (!identical(dim(M), c(p, q))) {
-    stop("'M' must have dimensions nrow(U) x ncol(V).")
+    stop("'M' must have dimensions nrow(Sigma) x ncol(Psi).")
   }
 
   if (require_A) {
@@ -44,6 +44,15 @@ validate_matrix_generator_inputs <- function(n, M, U, V, A = NULL, require_A = F
   }
 
   invisible(TRUE)
+}
+
+rmvn_matrix <- function(n, M, Sigma, Psi) {
+  validate_matrix_generator_inputs(n, M, Sigma, Psi)
+  X <- array(NA_real_, dim = c(nrow(M), ncol(M), n))
+  for (i in seq_len(n)) {
+    X[, , i] <- LaplacesDemon::rmatrixnorm(M = M, U = Sigma, V = Psi)
+  }
+  X
 }
 
 #' Generate matrix-variate skew-normal samples
@@ -56,30 +65,30 @@ validate_matrix_generator_inputs <- function(n, M, U, V, A = NULL, require_A = F
 #' }
 #'
 #' where \eqn{Z \sim N(0,1)} and
-#' \eqn{E \sim MN_{p \times q}(M, U, V)}.
+#' \eqn{E \sim MN_{p \times q}(M, Sigma, Psi)}.
 #'
 #' @param n Positive integer. Number of matrices to generate.
 #' @param M Numeric matrix of dimension \eqn{p \times q}. Location matrix used in the matrix-normal error.
 #' @param A Numeric matrix of dimension \eqn{p \times q}. Skewness matrix.
-#' @param U Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
-#' @param V Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
+#' @param Sigma Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
+#' @param Psi Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
 #'
 #' @return A numeric array of dimension \eqn{p \times q \times n}, where each slice
 #' `X[, , i]` is one simulated matrix observation.
 #'
 #' @keywords internal
-rmvsn <- function(n, M, A, U, V) {
+rmvsn <- function(n, M, A, Sigma, Psi) {
 
-  validate_matrix_generator_inputs(n = n, M = M, U = U, V = V, A = A, require_A = TRUE)
+  validate_matrix_generator_inputs(n = n, M = M, Sigma = Sigma, Psi = Psi, A = A, require_A = TRUE)
 
-  p <- nrow(U)
-  q <- ncol(V)
+  p <- nrow(Sigma)
+  q <- ncol(Psi)
 
   X <- array(NA_real_, dim = c(p, q, n))
 
   for (i in seq_len(n)) {
     z        <- abs(stats::rnorm(1))
-    eps      <- LaplacesDemon::rmatrixnorm(M = M, U = U, V = V)
+    eps      <- LaplacesDemon::rmatrixnorm(M = M, U = Sigma, V = Psi)
     X[, , i] <- A * z + eps
   }
 
@@ -96,7 +105,10 @@ rmvsn <- function(n, M, A, U, V) {
 #' the empirical `cens` quantile.
 #'
 #' @param n Positive integer. Number of matrices to generate.
-#' @param cens Numeric scalar in `(0, 1)`. Proportion used to define the censoring threshold.
+#' @param cens Numeric scalar in `[0, 1]`. Proportion used to define the
+#' censoring threshold. Zero returns complete data. One is supported for
+#' interval censoring and mixed interval/missingness, but not for a wholly
+#' missing sample (`Ind = 2`).
 #' @param Ind Integer. Type of incomplete-data mechanism:
 #' \itemize{
 #'   \item `1`: interval censoring;
@@ -104,8 +116,8 @@ rmvsn <- function(n, M, A, U, V) {
 #'   \item `3`: mixture of interval censoring and missing values.
 #' }
 #' @param M Numeric matrix of dimension \eqn{p \times q}. Location matrix.
-#' @param U Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
-#' @param V Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
+#' @param Sigma Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
+#' @param Psi Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
 #' @param A Optional numeric matrix of dimension \eqn{p \times q}. Required when `dist = "SN"`.
 #' @param dist Character. Distribution used to generate the complete data.
 #' Must be either `"SN"` or `"Normal"`.
@@ -118,34 +130,38 @@ rmvsn <- function(n, M, A, U, V) {
 #' }
 #'
 #' @keywords internal
-rmatrix_censored <- function(n, cens, Ind = 1, M, U, V, A = NULL, dist = c("SN", "Normal")) {
+rmatrix_censored <- function(n, cens, Ind = 1, M, Sigma, Psi, A = NULL, dist = c("SN", "Normal")) {
 
   dist <- match.arg(dist)
 
   validate_matrix_generator_inputs(
     n = n,
     M = M,
-    U = U,
-    V = V,
+    Sigma = Sigma,
+    Psi = Psi,
     A = A,
     require_A = identical(dist, "SN")
   )
 
-  if (!is.numeric(cens) || length(cens) != 1L || !is.finite(cens) || cens <= 0 || cens >= 1) {
-    stop("'cens' must be a single number in the open interval (0, 1).")
+  if (!is.numeric(cens) || length(cens) != 1L || !is.finite(cens) || cens < 0 || cens > 1) {
+    stop("'cens' must be a single number in the closed interval [0, 1].")
   }
 
   if (!is.numeric(Ind) || length(Ind) != 1L || !(Ind %in% c(1, 2, 3))) {
     stop("'Ind' must be one of 1, 2 or 3.")
   }
 
-  p <- nrow(U)
-  q <- ncol(V)
+  if (cens == 1 && Ind == 2) {
+    stop("'cens = 1' with 'Ind = 2' would create a wholly uninformative sample.")
+  }
+
+  p <- nrow(Sigma)
+  q <- ncol(Psi)
 
   X.or <- array(NA_real_, dim = c(p, q, n))
 
   for (i in seq_len(n)) {
-    eps <- LaplacesDemon::rmatrixnorm(M = M, U = U, V = V)
+    eps <- LaplacesDemon::rmatrixnorm(M = M, U = Sigma, V = Psi)
 
     if (dist == "Normal") {
       X.or[, , i] <- eps
@@ -158,8 +174,14 @@ rmatrix_censored <- function(n, cens, Ind = 1, M, U, V, A = NULL, dist = c("SN",
   X.cens <- X.or
   LS <- X.or
 
-  cutoff <- as.numeric(stats::quantile(X.or, probs = cens, names = FALSE, type = 7))
-  cc <- array(as.integer(X.or < cutoff), dim = dim(X.or))
+  if (cens == 0) {
+    cc <- array(0L, dim = dim(X.or))
+  } else if (cens == 1) {
+    cc <- array(1L, dim = dim(X.or))
+  } else {
+    cutoff <- as.numeric(stats::quantile(X.or, probs = cens, names = FALSE, type = 7))
+    cc <- array(as.integer(X.or < cutoff), dim = dim(X.or))
+  }
 
   cens_idx <- which(cc == 1L)
   obs_idx <- which(cc == 0L)
@@ -224,25 +246,25 @@ rmatrix_censored <- function(n, cens, Ind = 1, M, U, V, A = NULL, dist = c("SN",
 #' }
 #'
 #' where \eqn{Z \sim N(0,1)},
-#' \eqn{E \sim MN_{p \times q}(0, U, V)}, and
+#' \eqn{E \sim MN_{p \times q}(0, Sigma, Psi)}, and
 #' \eqn{W \sim Gamma(\nu/2, \nu/2)}.
 #'
 #' @param n Positive integer. Number of matrices to generate.
 #' @param M Numeric matrix of dimension \eqn{p \times q}. Location matrix.
 #' @param A Numeric matrix of dimension \eqn{p \times q}. Skewness matrix.
-#' @param U Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
-#' @param V Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
+#' @param Sigma Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
+#' @param Psi Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
 #' @param nu Positive numeric scalar. Degrees-of-freedom parameter.
 #'
 #' @return A numeric array of dimension \eqn{p \times q \times n}.
 #'
 #' @keywords internal
-rmvst <- function(n, M, A, U, V, nu) {
+rmvst <- function(n, M, A, Sigma, Psi, nu) {
   validate_matrix_generator_inputs(
     n = n,
     M = M,
-    U = U,
-    V = V,
+    Sigma = Sigma,
+    Psi = Psi,
     A = A,
     require_A = TRUE
   )
@@ -251,8 +273,8 @@ rmvst <- function(n, M, A, U, V, nu) {
     stop("'nu' must be a positive finite scalar.")
   }
 
-  p <- nrow(U)
-  q <- ncol(V)
+  p <- nrow(Sigma)
+  q <- ncol(Psi)
 
   X.or <- array(NA_real_, dim = c(p, q, n))
   M0 <- matrix(0, p, q)
@@ -260,7 +282,7 @@ rmvst <- function(n, M, A, U, V, nu) {
   for (i in seq_len(n)) {
     z <- abs(stats::rnorm(1))
     w <- stats::rgamma(1, shape = nu / 2, rate = nu / 2)
-    eps <- LaplacesDemon::rmatrixnorm(M = M0, U = U, V = V)
+    eps <- LaplacesDemon::rmatrixnorm(M = M0, U = Sigma, V = Psi)
 
     X.or[, , i] <- M + (A * z + eps) / sqrt(w)
   }
@@ -277,7 +299,7 @@ rmvst <- function(n, M, A, U, V, nu) {
 #' X = M + W A + \sqrt{W} Z,
 #' }
 #'
-#' where \eqn{Z \sim MN_{p \times q}(0, U, V)} and
+#' where \eqn{Z \sim MN_{p \times q}(0, Sigma, Psi)} and
 #' \eqn{W \sim IG(1, \tilde{\gamma})}.
 #'
 #' After generating the complete data, the function introduces censoring or
@@ -293,8 +315,8 @@ rmvst <- function(n, M, A, U, V, nu) {
 #'   \item `3`: mixture of interval censoring and missing values.
 #' }
 #' @param M Numeric matrix of dimension \eqn{p \times q}. Location matrix.
-#' @param U Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
-#' @param V Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
+#' @param Sigma Square numeric matrix of dimension \eqn{p \times p}. Row covariance matrix.
+#' @param Psi Square numeric matrix of dimension \eqn{q \times q}. Column covariance matrix.
 #' @param A Numeric matrix of dimension \eqn{p \times q}. Skewness matrix.
 #' @param gamma_tilde Positive numeric scalar. Shape parameter of the inverse Gaussian latent variable.
 #' Default is `2`.
@@ -308,11 +330,11 @@ rmvst <- function(n, M, A, U, V, nu) {
 #' }
 #'
 #' @keywords internal
-rmvnig <- function(n, cens, Ind, M, U, V, A, gamma_tilde = 2) {
+rmvnig <- function(n, cens, Ind, M, Sigma, Psi, A, gamma_tilde = 2) {
   # ------------------------------------------------------------
-  # Generate n samples from MVNIG_{p x q}(M, A, U, V, gamma_tilde)
+  # Generate n samples from MVNIG_{p x q}(M, A, Sigma, Psi, gamma_tilde)
   #   X = M + W*A + sqrt(W)*Z,
-  #   Z ~ MN_{p x q}(0, U, V),  W ~ IG(mean = 1, shape = gamma_tilde)
+  #   Z ~ MN_{p x q}(0, Sigma, Psi),  W ~ IG(mean = 1, shape = gamma_tilde)
   #
   # Ind:
   #   1 = interval censoring
@@ -339,24 +361,24 @@ rmvnig <- function(n, cens, Ind, M, U, V, A, gamma_tilde = 2) {
     stop("'Ind' must be 1 (censoring), 2 (missing), or 3 (both).")
   }
 
-  if (!is.matrix(M) || !is.matrix(U) || !is.matrix(V) || !is.matrix(A)) {
-    stop("'M', 'U', 'V', and 'A' must be matrices.")
+  if (!is.matrix(M) || !is.matrix(Sigma) || !is.matrix(Psi) || !is.matrix(A)) {
+    stop("'M', 'Sigma', 'Psi', and 'A' must be matrices.")
   }
 
-  p <- nrow(U)
-  q <- nrow(V)
+  p <- nrow(Sigma)
+  q <- nrow(Psi)
 
-  if (ncol(U) != p) {
-    stop("'U' must be a square matrix.")
+  if (ncol(Sigma) != p) {
+    stop("'Sigma' must be a square matrix.")
   }
-  if (ncol(V) != q) {
-    stop("'V' must be a square matrix.")
+  if (ncol(Psi) != q) {
+    stop("'Psi' must be a square matrix.")
   }
   if (!all(dim(M) == c(p, q))) {
-    stop("'M' must have dimension p x q, where p = nrow(U) and q = nrow(V).")
+    stop("'M' must have dimension p x q, where p = nrow(Sigma) and q = nrow(Psi).")
   }
   if (!all(dim(A) == c(p, q))) {
-    stop("'A' must have dimension p x q, where p = nrow(U) and q = nrow(V).")
+    stop("'A' must have dimension p x q, where p = nrow(Sigma) and q = nrow(Psi).")
   }
 
   if (!is.numeric(gamma_tilde) || length(gamma_tilde) != 1L || gamma_tilde <= 0) {
@@ -369,7 +391,7 @@ rmvnig <- function(n, cens, Ind, M, U, V, A, gamma_tilde = 2) {
 
   Z0 <- matrix(0, p, q)
   for (i in seq_len(n)) {
-    Z <- LaplacesDemon::rmatrixnorm(M = Z0, U = U, V = V)
+    Z <- LaplacesDemon::rmatrixnorm(M = Z0, U = Sigma, V = Psi)
     X.or[, , i] <- M + W[i] * A + sqrt(W[i]) * Z
   }
 
@@ -439,16 +461,16 @@ rmvnig <- function(n, cens, Ind, M, U, V, A, gamma_tilde = 2) {
 #'
 #' Generates random matrices from the stochastic representation
 #' \deqn{
-#'   X = M + W A + \sqrt{W} V,
+#'   X = M + W A + \sqrt{W} Psi,
 #' }
 #' where \eqn{W \sim \mathrm{Exp}(\mathrm{rate})} and
-#' \eqn{V \sim \mathcal{N}_{p \times q}(0, \Sigma, \Psi)}.
+#' \eqn{Psi \sim \mathcal{N}_{p \times q}(0, \Sigma, \Psi)}.
 #'
 #' @param n Positive integer. Number of random matrices to generate.
 #' @param M Numeric matrix of dimension \eqn{p \times q}. Location matrix.
 #' @param A Numeric matrix of dimension \eqn{p \times q}. Skewness or drift matrix.
-#' @param U Square positive definite matrix. Row covariance matrix.
-#' @param V Square positive definite matrix. Column covariance matrix.
+#' @param Sigma Square positive definite matrix. Row covariance matrix.
+#' @param Psi Square positive definite matrix. Column covariance matrix.
 #' @param rate Positive finite scalar. Rate parameter of the exponential
 #' distribution used for \eqn{W}. Default is \code{1}.
 #'
@@ -460,7 +482,7 @@ rmvnig <- function(n, cens, Ind, M, U, V, A, gamma_tilde = 2) {
 #' For each sample, the function generates
 #' \eqn{W \sim \mathrm{Exp}(\mathrm{rate})} and a standard normal matrix
 #' \eqn{Z \in \mathbb{R}^{p \times q}}. Then it constructs
-#' \eqn{V = L_\Sigma Z L_\Psi^\top}, where \eqn{L_\Sigma} and
+#' \eqn{Psi = L_\Sigma Z L_\Psi^\top}, where \eqn{L_\Sigma} and
 #' \eqn{L_\Psi} are Cholesky factors of \eqn{\Sigma} and \eqn{\Psi},
 #' respectively.
 #'
@@ -470,7 +492,7 @@ rmvnig <- function(n, cens, Ind, M, U, V, A, gamma_tilde = 2) {
 #' }
 #'
 #' @keywords internal
-rmvvg <- function(n, M, A, U, V, rate = 1) {
+rmvvg <- function(n, M, A, Sigma, Psi, rate = 1) {
   if (!is.numeric(n) ||
       length(n) != 1L ||
       !is.finite(n) ||
@@ -487,12 +509,12 @@ rmvvg <- function(n, M, A, U, V, rate = 1) {
     stop("'A' must be a matrix.")
   }
 
-  if (!is.matrix(U) || nrow(U) != ncol(U)) {
-    stop("'U' must be a square matrix.")
+  if (!is.matrix(Sigma) || nrow(Sigma) != ncol(Sigma)) {
+    stop("'Sigma' must be a square matrix.")
   }
 
-  if (!is.matrix(V) || nrow(V) != ncol(V)) {
-    stop("'V' must be a square matrix.")
+  if (!is.matrix(Psi) || nrow(Psi) != ncol(Psi)) {
+    stop("'Psi' must be a square matrix.")
   }
 
   p <- nrow(M)
@@ -502,29 +524,29 @@ rmvvg <- function(n, M, A, U, V, rate = 1) {
     stop("'A' must have the same dimensions as 'M'.")
   }
 
-  if (!all(dim(U) == c(p, p))) {
-    stop("'U' must have dimensions p x p, where p = nrow(M).")
+  if (!all(dim(Sigma) == c(p, p))) {
+    stop("'Sigma' must have dimensions p x p, where p = nrow(M).")
   }
 
-  if (!all(dim(V) == c(q, q))) {
-    stop("'V' must have dimensions q x q, where q = ncol(M).")
+  if (!all(dim(Psi) == c(q, q))) {
+    stop("'Psi' must have dimensions q x q, where q = ncol(M).")
   }
 
   if (!is.numeric(rate) || length(rate) != 1L || !is.finite(rate) || rate <= 0) {
     stop("'rate' must be a positive finite scalar.")
   }
 
-  U <- (U + t(U)) / 2
-  V <- (V + t(V)) / 2
+  Sigma <- (Sigma + t(Sigma)) / 2
+  Psi <- (Psi + t(Psi)) / 2
 
   chol_U <- tryCatch(
-    chol(U),
-    error = function(e) stop("'U' must be positive definite.")
+    chol(Sigma),
+    error = function(e) stop("'Sigma' must be positive definite.")
   )
 
   chol_V <- tryCatch(
-    chol(V),
-    error = function(e) stop("'V' must be positive definite.")
+    chol(Psi),
+    error = function(e) stop("'Psi' must be positive definite.")
   )
 
   X_array <- array(NA_real_, dim = c(p, q, n))
@@ -576,8 +598,8 @@ rmvrsn <- function(n, M, A, Sigma, Psi, seed = NULL, return_latent = FALSE) {
   for (i in seq_len(n)) {
     w <- abs(stats::rnorm(pars$p))
     Z <- matrix(stats::rnorm(pars$p * pars$q), nrow = pars$p, ncol = pars$q)
-    V <- L_sigma %*% Z %*% R_psi
-    X[, , i] <- pars$M + diag(w, pars$p, pars$p) %*% pars$A + V
+    noise <- L_sigma %*% Z %*% R_psi
+    X[, , i] <- pars$M + diag(w, pars$p, pars$p) %*% pars$A  + noise
     W[i, ] <- w
   }
 
@@ -606,7 +628,9 @@ rmvrsn <- function(n, M, A, Sigma, Psi, seed = NULL, return_latent = FALSE) {
 #' @param Psi Positive-definite column covariance matrix of dimension `q` by
 #'   `q`.
 #' @param lambda Optional positive rate vector of length `p`. When `NULL`, a
-#'   vector of ones is used.
+#'   vector of ones is used. The high-level `mv_random("MVREN", ...)` API
+#'   accepts only the unit vector; non-unit values here are retained for the
+#'   unexported general stochastic representation.
 #' @param return_latent If `TRUE`, return the generated latent exponential
 #'   vectors together with the observations.
 #'
@@ -644,10 +668,10 @@ rmvren <- function(n,
   for (i in seq_len(n)) {
     w <- stats::rexp(pars$p, rate = pars$lambda)
     Z <- matrix(stats::rnorm(pars$p * pars$q), nrow = pars$p, ncol = pars$q)
-    V <- L_Sigma %*% Z %*% t(L_Psi)
+    noise <- L_Sigma %*% Z %*% t(L_Psi)
 
     W[i, ] <- w
-    X[, , i] <- pars$M + diag(w, pars$p, pars$p) %*% pars$A + V
+    X[, , i] <- pars$M + diag(w, pars$p, pars$p) %*% pars$A  + noise
   }
 
   if (isTRUE(return_latent)) {
@@ -655,6 +679,3 @@ rmvren <- function(n,
   }
   X
 }
-
-
-

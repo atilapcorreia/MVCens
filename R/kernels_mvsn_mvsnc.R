@@ -154,9 +154,11 @@ prob_opt <- function(lower = rep(-Inf, ncol(sigma)),
 
 #' Density of the multivariate skew-normal distribution
 #'
-#' Evaluates the probability density of a multivariate skew-normal distribution
-#' at a given observation, with numerical regularization of the covariance
-#' matrices controlled by \code{epsilon}.
+#' Evaluates the probability density of the multivariate skew-normal kernel
+#' used by the matrix-variate skew-normal model. The density corresponds to a
+#' Gaussian component perturbed by a half-normal latent skewing variable. The
+#' matrix-variate likelihood functions call this kernel after vectorizing each
+#' `p` by `q` observation.
 #'
 #' @param y Numeric vector containing the values at which the density is
 #'   evaluated.
@@ -173,6 +175,11 @@ prob_opt <- function(lower = rep(-Inf, ncol(sigma)),
 #'
 #' @return A numeric scalar containing the density evaluated at \code{y}.
 #'
+#' @examples
+#' Y <- matrix(seq(-0.2, 0.9, length.out = 12), 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' dmvsn(as.vector(Y), mu = rep(0, 12), Sigma = diag(12), lambda = as.vector(A))
+#' @family MVCens density functions
 #' @export
 
 dmvsn <- function(y, mu, Sigma, lambda, epsilon = 1e-8) {
@@ -210,35 +217,46 @@ dmvsn <- function(y, mu, Sigma, lambda, epsilon = 1e-8) {
 #' Matrix-variate skew-normal log-likelihood
 #'
 #' Computes the total log-likelihood for complete matrix-variate skew-normal
-#' data. Each matrix observation is vectorized and evaluated through the
-#' corresponding multivariate skew-normal density.
+#' data. The model uses the stochastic representation `X = M + W A + V`, where
+#' `W` is a positive half-normal latent variable and `V` is matrix-normal noise
+#' with separable row and column covariance. Each `p` by `q` observation is
+#' vectorized and evaluated through the corresponding multivariate
+#' skew-normal density with Kronecker covariance structure.
 #'
-#' @param dados Numeric array with dimensions \eqn{p \times q \times n}.
+#' @param X Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param muM Location matrix of dimension \eqn{p \times q}.
 #' @param AM Skewness matrix of dimension \eqn{p \times q}.
 #' @param SigmaM Row covariance matrix of dimension \eqn{p \times p}.
 #' @param PsiM Column covariance matrix of dimension \eqn{q \times q}.
 #' @param epsilon Numerical tolerance for covariance regularization.
 #'
-#' @return Numeric scalar containing the total log-likelihood.
+#' @return A finite numeric scalar containing the total log-likelihood.
 #'
+#' @examples
+#' x <- array(seq(-0.2, 2.1, length.out = 24), dim = c(3, 4, 2))
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' loglik_mvsn(
+#'   x, muM = matrix(0, 3, 4), AM = A,
+#'   SigmaM = diag(3), PsiM = diag(4)
+#' )
+#' @family MVCens likelihood functions
 #' @export
-loglik_mvsn <- function(dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
+loglik_mvsn <- function(X, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
 
-  if (length(dim(dados)) != 3L) {
-    stop("'dados' must be a 3D array.")
+  if (length(dim(X)) != 3L) {
+    stop("'X' must be a 3D array.")
   }
 
-  n <- dim(dados)[3]
-  mu_vec <- vec_col(muM)
-  lambda_vec <- vec_col(AM)
+  n <- dim(X)[3]
+  mu_vec <- matrix_vectorize(muM)
+  lambda_vec <- matrix_vectorize(AM)
   Sigma_full <- make_posdef(kronecker(PsiM, SigmaM), epsilon = epsilon)
 
   suma1 <- 0
 
   for (j in seq_len(n)) {
     dens <- dmvsn(
-      y = vec_col(dados[, , j]),
+      y = matrix_vectorize(X[, , j]),
       mu = mu_vec,
       Sigma = Sigma_full,
       lambda = lambda_vec,
@@ -257,45 +275,62 @@ loglik_mvsn <- function(dados, muM, AM, SigmaM, PsiM, epsilon = 1e-8) {
 
 #' Censored matrix-variate skew-normal log-likelihood
 #'
-#' Computes the observed-data log-likelihood for censored matrix-variate
-#' skew-normal data. Fully observed observations are evaluated by the
-#' extended skew-normal density, fully censored observations by the corresponding
-#' probability, and partially censored observations by conditional decomposition.
+#' Computes the observed-data log-likelihood for censored and/or missing
+#' matrix-variate skew-normal data. The model extends the censored
+#' matrix-normal likelihood by adding the half-normal latent skewness variable
+#' used in the MVSN representation. Fully observed observations are evaluated
+#' by the extended skew-normal density, fully censored observations by the
+#' corresponding probability, and partially censored observations by conditional
+#' decomposition.
 #'
-#' @param cc Censoring indicator array. Entries equal to `1` indicate censored or
-#' missing values.
-#' @param LS Array of upper censoring limits.
-#' @param dados Numeric array with dimensions \eqn{p \times q \times n}.
+#' @param cc Censoring indicator array with the same dimensions as `X`.
+#'   Entries equal to `1` indicate censored or missing values; entries equal to
+#'   `0` indicate observed values.
+#' @param LS Array of upper censoring limits with the same dimensions as `X`.
+#'   Censored entries must satisfy `X <= LS`.
+#' @param X Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param muM Location matrix of dimension \eqn{p \times q}.
 #' @param SigmaM Row covariance matrix of dimension \eqn{p \times p}.
 #' @param PsiM Column covariance matrix of dimension \eqn{q \times q}.
 #' @param lambdaM Skewness matrix of dimension \eqn{p \times q}.
 #' @param epsilon Numerical tolerance for covariance regularization.
 #'
-#' @return Numeric scalar containing the observed-data log-likelihood.
+#' @return A finite numeric scalar containing the observed-data log-likelihood.
 #'
+#' @examples
+#' x <- array(seq(-0.2, 2.1, length.out = 24), dim = c(3, 4, 2))
+#' cc <- array(0, dim = dim(x))
+#' cc[1, 1, 2] <- 1
+#' limits <- array(Inf, dim = dim(x))
+#' limits[1, 1, 2] <- 1.2
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' loglik_mvsnc(
+#'   cc, limits, x, muM = matrix(0, 3, 4), SigmaM = diag(3),
+#'   PsiM = diag(4), lambdaM = A
+#' )
+#' @family MVCens likelihood functions
 #' @export
-loglik_mvsnc <- function(cc, LS, dados, muM, SigmaM, PsiM, lambdaM, epsilon = 1e-8) {
-  if (length(dim(dados)) != 3L) {
-    stop("'dados' must be a 3D array.")
+loglik_mvsnc <- function(cc, LS, X, muM, SigmaM, PsiM, lambdaM, epsilon = 1e-8) {
+  if (length(dim(X)) != 3L) {
+    stop("'X' must be a 3D array.")
   }
 
-  if (!identical(dim(dados), dim(cc)) || !identical(dim(dados), dim(LS))) {
-    stop("'dados', 'cc' and 'LS' must have the same dimensions.")
+  if (!identical(dim(X), dim(cc)) || !identical(dim(X), dim(LS))) {
+    stop("'X', 'cc' and 'LS' must have the same dimensions.")
   }
 
   if (!all(cc %in% c(0, 1))) {
     stop("'cc' must contain only 0 and 1.")
   }
 
-  p <- dim(dados)[1]
-  q <- dim(dados)[2]
-  m <- dim(dados)[3]
+  p <- dim(X)[1]
+  q <- dim(X)[2]
+  m <- dim(X)[3]
 
   ver <- numeric(m)
 
   Vari <- make_posdef(kronecker(PsiM, SigmaM), epsilon = epsilon)
-  lambdaMaux <- matrix(vec_col(lambdaM), p * q, 1)
+  lambdaMaux <- matrix(matrix_vectorize(lambdaM), p * q, 1)
   Sigma <- make_posdef(Vari + lambdaMaux %*% t(lambdaMaux), epsilon = epsilon)
   Sigma_inv <- solve_sym_pd(Sigma, epsilon = epsilon)
 
@@ -305,12 +340,12 @@ loglik_mvsnc <- function(cc, LS, dados, muM, SigmaM, PsiM, lambdaM, epsilon = 1e
   sqrtSigma <- sqrtm(Sigma, epsilon = epsilon)
   lambda <- solve(sqrtSigma, lambdaMaux) / sqrt(denom)
   varphi <- solve(sqrtSigma, lambda)
-  mu <- vec_col(muM)
+  mu <- matrix_vectorize(muM)
 
   for (j in seq_len(m)) {
-    cc1 <- vec_col(cc[, , j])
-    LS1 <- vec_col(LS[, , j])
-    y1 <- vec_col(dados[, , j])
+    cc1 <- matrix_vectorize(cc[, , j])
+    LS1 <- matrix_vectorize(LS[, , j])
+    y1 <- matrix_vectorize(X[, , j])
 
     miss <- which(cc1 == 1)
     obs <- which(cc1 == 0)
@@ -398,48 +433,48 @@ loglik_mvsnc <- function(cc, LS, dados, muM, SigmaM, PsiM, lambdaM, epsilon = 1e
 #'
 #' Fits a complete-data matrix-variate skew-normal model by an ECM algorithm.
 #'
-#' @param dados Numeric array with dimensions \eqn{p \times q \times n}.
+#' @param X Numeric array with dimensions \eqn{p \times q \times n}.
 #' @param precision Positive scalar. Convergence tolerance.
-#' @param MaxIter Positive integer. Maximum number of ECM iterations.
+#' @param max_iter Positive integer. Maximum number of ECM iterations.
 #' @param epsilon Numerical tolerance for covariance regularization.
 #'
-#' @return An object of class `"MVSN"` containing:
+#' @return An object of class `"MVSN.ECM"` containing:
 #' \describe{
-#'   \item{mu}{Estimated location matrix.}
+#'   \item{M, mu}{Estimated location matrix. `M` is the canonical name and
+#'   `mu` is retained as a compatibility alias.}
 #'   \item{A}{Estimated skewness matrix.}
 #'   \item{Sigma}{Estimated row covariance matrix.}
 #'   \item{Psi}{Estimated column covariance matrix.}
 #'   \item{loglik}{Final log-likelihood value.}
+#'   \item{loglik_history}{Sequence of log-likelihood values.}
 #'   \item{BIC}{Bayesian information criterion.}
-#'   \item{iter}{Number of iterations.}
+#'   \item{iterations, iter}{Number of iterations. `iter` is a compatibility alias.}
 #'   \item{converged}{Logical value indicating convergence.}
+#'   \item{criterion}{Final relative log-likelihood change.}
+#'   \item{monotone}{Whether the likelihood history avoided material decreases.}
+#'   \item{monotone_drops}{Recorded likelihood decreases beyond tolerance.}
+#'   \item{normalize_Psi}{Always `TRUE`; `Psi` uses the normalized representation.}
+#'   \item{npar}{Parameter count used in the BIC.}
 #' }
 #'
 #' @keywords internal
-mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
-  if (length(dim(dados)) != 3L) {
-    stop("'dados' deve ser um array 3D com dimensoes p x q x n.")
-  }
+mvsn_ecm <- function(X, precision = 1e-8, max_iter = 50, epsilon = 1e-8) {
+  validate_mvn_input(X)
 
-  if (anyNA(dados)) {
-    stop("'dados' contem NA. Trate os dados antes de rodar o ECM.")
-  }
+  state <- initialize_ecm_state(X, max_iter)
+  p <- state$p
+  q <- state$q
+  n <- state$n
+  loglik <- state$loglik
+  criterio <- state$criterion
+  count <- state$iteration
+  mu <- state$mu
+  A <- state$A
+  Sigma <- state$Sigma
+  Psi <- state$Psi
+  Vari <- state$Vari
 
-  p <- dim(dados)[1]
-  q <- dim(dados)[2]
-  n <- dim(dados)[3]
-
-  loglik <- numeric(MaxIter)
-  criterio <- Inf
-  count <- 0L
-
-  mu <- apply(dados, c(1, 2), mean)
-  A <- apply(dados, c(1, 2), mean)
-  Sigma <- diag(p)
-  Psi <- diag(q)
-  Vari <- kronecker(Psi, Sigma)
-
-  while (criterio > precision && count < MaxIter) {
+  while (criterio > precision && count < max_iter) {
     count <- count + 1L
 
     suma00 <- 0
@@ -448,12 +483,12 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
     suma2 <- matrix(0, q, q)
     suma3 <- matrix(0, p, p)
 
-    mu1 <- vec_col(mu)
-    A1 <- vec_col(A)
+    mu1 <- matrix_vectorize(mu)
+    A1 <- matrix_vectorize(A)
     Vari_inv <- solve_sym_pd(Vari, epsilon = epsilon)
 
     for (j in seq_len(n)) {
-      y1 <- vec_col(dados[, , j])
+      y1 <- matrix_vectorize(X[, , j])
 
       Mtij2 <- as.numeric(1 / (1 + t(A1) %*% Vari_inv %*% A1))
       Mtij2 <- max(Mtij2, epsilon)
@@ -472,19 +507,19 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
     }
 
     mu <- suma0 / n
-    mu1 <- vec_col(mu)
+    mu1 <- matrix_vectorize(mu)
 
     if (abs(suma00) <= epsilon) {
       stop("Atualizacao de 'A' falhou: denominador numericamente nulo.")
     }
 
     A <- suma1 / as.numeric(suma00)
-    A1 <- vec_col(A)
+    A1 <- matrix_vectorize(A)
 
     Vari_inv <- solve_sym_pd(Vari, epsilon = epsilon)
 
     for (j in seq_len(n)) {
-      y1 <- vec_col(dados[, , j])
+      y1 <- matrix_vectorize(X[, , j])
 
       Mtij2 <- as.numeric(1 / (1 + t(A1) %*% Vari_inv %*% A1))
       Mtij2 <- max(Mtij2, epsilon)
@@ -511,7 +546,7 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
     Vari_inv <- solve_sym_pd(Vari, epsilon = epsilon)
 
     for (j in seq_len(n)) {
-      y1 <- vec_col(dados[, , j])
+      y1 <- matrix_vectorize(X[, , j])
 
       Mtij2 <- as.numeric(1 / (1 + t(A1) %*% Vari_inv %*% A1))
       Mtij2 <- max(Mtij2, epsilon)
@@ -536,28 +571,37 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
     Sigma <- make_posdef(suma3 / (q * n), epsilon = epsilon)
     Vari <- kronecker(Psi, Sigma)
 
-    loglik[count] <- loglik_mvsn(dados, mu, A, Sigma, Psi, epsilon = epsilon)
+    loglik[count] <- loglik_mvsn(X, mu, A, Sigma, Psi, epsilon = epsilon)
     criterio <- compute_ecm_criterion(loglik, count)
   }
 
   loglik <- loglik[seq_len(count)]
+  diagnostics <- ecm_output_diagnostics(loglik, criterio)
 
-  if (count == MaxIter && criterio > precision) {
+  if (count == max_iter && criterio > precision) {
     warning("The algorithm stopped after reaching the maximum number of iterations without convergence.")
   }
 
   npar <- 2 * (p * q) + (p * (p + 1) / 2) + (q * (q + 1) / 2) - 1
-  BIC <- -2 * loglik[count] + npar * log(n)
+  BIC <- -2 * diagnostics$loglik + npar * log(n)
 
   obj.out <- list(
+    M = mu,
     mu = mu,
     A = A,
     Sigma = Sigma,
     Psi = Psi,
-    loglik = loglik[count],
+    loglik = diagnostics$loglik,
+    loglik_history = diagnostics$loglik_history,
     BIC = BIC,
+    iterations = count,
     iter = count,
-    converged = (criterio <= precision)
+    converged = (criterio <= precision),
+    criterion = diagnostics$criterion,
+    monotone = diagnostics$monotone,
+    monotone_drops = diagnostics$monotone_drops,
+    normalize_Psi = TRUE,
+    npar = npar
   )
 
   class(obj.out) <- "MVSN.ECM"
@@ -571,41 +615,55 @@ mvsn_ecm <- function(dados, precision = 1e-8, MaxIter = 50, epsilon = 1e-8) {
 #' matrix observations using conditional moments from skew-normal and extended
 #' skew-normal truncated distributions.
 #'
-#' @param dados Numeric array with dimensions \eqn{p \times q \times n}.
-#' @param cc Censoring indicator array with the same dimensions as `dados`.
+#' @param X Numeric array with dimensions \eqn{p \times q \times n}.
+#' @param cc Censoring indicator array with the same dimensions as `X`.
 #' Entries equal to `1` indicate censored or missing values.
-#' @param LS Array of upper censoring limits with the same dimensions as `dados`.
+#' @param LS Array of upper censoring limits with the same dimensions as `X`.
 #' @param precision Positive scalar. Convergence tolerance.
-#' @param MaxIter Positive integer. Maximum number of ECM iterations.
+#' @param max_iter Positive integer. Maximum number of ECM iterations.
 #' @param epsilon Numerical tolerance for covariance regularization.
 #'
 #' @return An object of class `"MVSNC.ECM"` containing:
 #' \describe{
-#'   \item{mu}{Estimated location matrix.}
+#'   \item{M, mu}{Estimated location matrix. `M` is the canonical name and
+#'   `mu` is retained as a compatibility alias.}
 #'   \item{Sigma}{Estimated row covariance matrix.}
 #'   \item{Psi}{Estimated column covariance matrix.}
 #'   \item{A}{Estimated skewness matrix.}
 #'   \item{loglik}{Final observed-data log-likelihood.}
+#'   \item{loglik_history}{Sequence of observed-data log-likelihood values.}
 #'   \item{BIC}{Bayesian information criterion.}
-#'   \item{iter}{Number of iterations.}
+#'   \item{iterations, iter}{Number of iterations. `iter` is a compatibility alias.}
 #'   \item{converged}{Logical value indicating convergence.}
+#'   \item{criterion}{Final relative log-likelihood change.}
+#'   \item{monotone}{Whether the likelihood history avoided material decreases.}
+#'   \item{monotone_drops}{Recorded likelihood decreases beyond tolerance.}
+#'   \item{normalize_Psi}{Always `TRUE`; `Psi` uses the normalized representation.}
+#'   \item{npar}{Parameter count used in the BIC.}
 #' }
 #'
 #' @keywords internal
-mvsnc_ecm <- function(dados, cc, LS, precision = 1e-6, MaxIter = 50, epsilon = 1e-8) {
+mvsnc_ecm <- function(X, cc, LS, precision = 1e-6, max_iter = 50, epsilon = 1e-8) {
 
-  validate_mvnc_input(dados, cc, LS)
+  validate_mvnc_input(X, cc, LS)
 
-  p <- dim(dados)[1]
-  q <- dim(dados)[2]
-  n <- dim(dados)[3]
+  if (!any(cc == 1)) {
+    fit <- mvsn_ecm(X, precision = precision, max_iter = max_iter,
+                    epsilon = epsilon)
+    class(fit) <- "MVSNC.ECM"
+    return(fit)
+  }
 
-  loglik <- numeric(MaxIter)
+  p <- dim(X)[1]
+  q <- dim(X)[2]
+  n <- dim(X)[3]
+
+  loglik <- numeric(max_iter)
   criterio <- Inf
   count <- 0L
 
-  dados2 <- dados
-  dados2[cc == 1] <- get_observed_fill_value(dados, cc)
+  dados2 <- X
+  dados2[cc == 1] <- get_observed_fill_value(X, cc)
 
   muM <- apply(dados2, c(1, 2), mean)
   DeltaM <- apply(dados2, c(1, 2), mean)
@@ -613,7 +671,7 @@ mvsnc_ecm <- function(dados, cc, LS, precision = 1e-6, MaxIter = 50, epsilon = 1
   SigmaM <- diag(p)
 
   Gamma <- kronecker(PsiM, SigmaM)
-  Delta <- matrix(vec_col(DeltaM), p * q, 1)
+  Delta <- matrix(matrix_vectorize(DeltaM), p * q, 1)
   Sigma <- make_posdef(Gamma + Delta %*% t(Delta), epsilon = epsilon)
 
   sqrtSigma <- sqrtm(Sigma, epsilon = epsilon)
@@ -623,9 +681,9 @@ mvsnc_ecm <- function(dados, cc, LS, precision = 1e-6, MaxIter = 50, epsilon = 1
   denom_shape <- max(denom_shape, epsilon)
   shape <- solve(sqrtSigma, Delta) / sqrt(denom_shape)
 
-  mu <- vec_col(muM)
+  mu <- matrix_vectorize(muM)
 
-  while (criterio > precision && count < MaxIter) {
+  while (criterio > precision && count < max_iter) {
     count <- count + 1L
 
     sumaw2 <- 0
@@ -644,9 +702,9 @@ mvsnc_ecm <- function(dados, cc, LS, precision = 1e-6, MaxIter = 50, epsilon = 1
     Gamma_inv <- solve_sym_pd(Gamma, epsilon = epsilon)
 
     for (j in seq_len(n)) {
-      cc1 <- vec_col(cc[, , j])
-      LS1 <- vec_col(LS[, , j])
-      y1 <- vec_col(dados[, , j])
+      cc1 <- matrix_vectorize(cc[, , j])
+      LS1 <- matrix_vectorize(LS[, , j])
+      y1 <- matrix_vectorize(X[, , j])
 
       if (sum(cc1) == 0L) {
         aux1 <- as.numeric(t(varphi) %*% (y1 - mu))
@@ -864,7 +922,7 @@ mvsnc_ecm <- function(dados, cc, LS, precision = 1e-6, MaxIter = 50, epsilon = 1
     PsiM <- normalize_cov_constraint(suma2, epsilon = epsilon)
 
     Gamma <- kronecker(PsiM, SigmaM)
-    Delta <- matrix(vec_col(DeltaM), p * q, 1)
+    Delta <- matrix(matrix_vectorize(DeltaM), p * q, 1)
     Sigma <- make_posdef(Gamma + Delta %*% t(Delta), epsilon = epsilon)
 
     sqrtSigma <- sqrtm(Sigma, epsilon = epsilon)
@@ -874,34 +932,65 @@ mvsnc_ecm <- function(dados, cc, LS, precision = 1e-6, MaxIter = 50, epsilon = 1
     denom_shape <- max(denom_shape, epsilon)
     shape <- solve(sqrtSigma, Delta) / sqrt(denom_shape)
 
-    mu <- vec_col(muM)
+    mu <- matrix_vectorize(muM)
 
-    loglik[count] <- loglik_mvsnc(cc, LS, dados, muM, SigmaM, PsiM, DeltaM, epsilon = epsilon)
+    loglik[count] <- loglik_mvsnc(cc, LS, X, muM, SigmaM, PsiM, DeltaM, epsilon = epsilon)
     criterio <- compute_ecm_criterion(loglik, count)
   }
 
   loglik <- loglik[seq_len(count)]
+  diagnostics <- ecm_output_diagnostics(loglik, criterio)
 
-  if (count == MaxIter && criterio > precision) {
+  if (count == max_iter && criterio > precision) {
     warning("The algorithm stopped after reaching the maximum number of iterations without convergence.")
   }
 
   npar <- 2 * (p * q) + (p * (p + 1) / 2) + (q * (q + 1) / 2) - 1
-  BIC <- -2 * loglik[count] + npar * log(n)
+  BIC <- -2 * diagnostics$loglik + npar * log(n)
 
   obj.out <- list(
+    M = muM,
     mu = muM,
     Sigma = SigmaM,
     Psi = PsiM,
     A = DeltaM,
-    loglik = loglik[count],
+    loglik = diagnostics$loglik,
+    loglik_history = diagnostics$loglik_history,
     BIC = BIC,
+    iterations = count,
     iter = count,
-    converged = (criterio <= precision)
+    converged = (criterio <= precision),
+    criterion = diagnostics$criterion,
+    monotone = diagnostics$monotone,
+    monotone_drops = diagnostics$monotone_drops,
+    normalize_Psi = TRUE,
+    npar = npar
   )
 
   class(obj.out) <- "MVSNC.ECM"
   obj.out
 }
 
+#' Monte Carlo study for the matrix-variate skew-normal ECM estimator.
+#' @keywords internal
+#' @noRd
+mvsn_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400),
+                             replications = 200,
+                             truth = default_mc_truth(skew = TRUE),
+                             precision = 1e-6, max_iter = 50,
+                             seed = 123, verbose = FALSE, workers = NULL) {
+  run_model_monte_carlo("MVSN", sample_sizes, replications, truth,
+                        precision, max_iter, seed, workers, NULL, NULL, verbose)
+}
 
+#' Monte Carlo study for the censored matrix-variate skew-normal ECM estimator.
+#' @keywords internal
+#' @noRd
+mvsnc_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400),
+                              replications = 200,
+                              truth = default_mc_truth(skew = TRUE), cens = 0.2, Ind = 1,
+                              precision = 1e-6, max_iter = 50,
+                              seed = 123, verbose = FALSE, workers = NULL) {
+  run_model_monte_carlo("MVSNC", sample_sizes, replications, truth,
+                        precision, max_iter, seed, workers, cens, Ind, verbose)
+}

@@ -1,9 +1,16 @@
 Package: MVCens
 Title: Matrix-Variate Models for Censored, Skewed, and Heavy-Tailed Data
-Version: 0.0.0.9000
-Authors@R: 
-    person("Atila", "Correia", , "atilapc1989@gmail.com", role = c("aut", "cre"))
-Description:  Provides simulation and likelihood-based estimation procedures
+Version: 0.1.0.9000
+Authors@R: c(
+    person("Átila Prates", "Correia", email = "atilapc1989@gmail.com", role = c("aut", "cre")),
+    person("Victor Hugo", "Lachos", email = "hlachos@uconn.edu", role = "aut"),
+    person("Carlos Alberto Ribeiro", "Diniz", email = "dcad@ufscar.br", role = "aut")
+    )
+Author: Átila Prates Correia [aut, cre],
+  Victor Hugo Lachos [aut],
+  Carlos Alberto Ribeiro Diniz [aut]
+Maintainer: Átila Prates Correia <atilapc1989@gmail.com>
+Description: Provides simulation and likelihood-based estimation procedures
     for matrix-variate statistical models with emphasis on censored,
     incomplete, skewed, and heavy-tailed data. The package implements
     unified interfaces for random generation and ECM-based maximum
@@ -16,7 +23,6 @@ Description:  Provides simulation and likelihood-based estimation procedures
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
 Imports: 
     LaplacesDemon,
     Matrix,
@@ -27,4 +33,7 @@ Imports:
     statmod,
     tlrmvnmvt,
     tmvtnorm
-
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0

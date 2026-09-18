@@ -15,153 +15,6 @@
 # Internal numerical utilities
 # ---------------------------------------------------------------------------
 
-#' Vectorize a matrix
-#'
-#' Internal utility that converts a matrix-like object into a vector by stacking
-#' its columns in column-major order, following R's default vectorization
-#' convention.
-#'
-#' @param B A matrix or an object coercible to a matrix.
-#'
-#' @return A vector containing the entries of `B` in column-major order.
-#'
-#' @keywords internal
-#' @noRd
-mvrsn_vec <- function(B) {
-  as.vector(B)
-}
-
-#' Compute the Frobenius norm
-#'
-#' Internal utility that computes the Frobenius norm of a matrix-like object,
-#' defined as the square root of the sum of its squared entries.
-#'
-#' @param X A numeric matrix or an object coercible to a matrix.
-#'
-#' @return A nonnegative numeric value giving the Frobenius norm of `X`.
-#'
-#' @keywords internal
-#' @noRd
-mvrsn_frobenius <- function(X) {
-  sqrt(sum(as.matrix(X)^2))
-}
-
-#' Compute the relative Frobenius error
-#'
-#' Internal utility that computes the relative Frobenius norm of the difference
-#' between an estimated matrix and a reference matrix. If the Frobenius norm of
-#' the reference matrix is numerically zero, the absolute Frobenius norm of the
-#' difference is returned instead.
-#'
-#' @param estimate A numeric matrix containing the estimated values.
-#' @param truth A numeric matrix containing the reference (true) values.
-#'
-#' @return A nonnegative numeric value giving the relative Frobenius error
-#'   between `estimate` and `truth`, or the absolute Frobenius error when the
-#'   reference matrix has (numerically) zero Frobenius norm.
-#'
-#' @keywords internal
-#' @noRd
-mvrsn_relative_frobenius <- function(estimate, truth) {
-  denom <- mvrsn_frobenius(truth)
-  if (denom <= .Machine$double.eps) {
-    return(mvrsn_frobenius(estimate - truth))
-  }
-  mvrsn_frobenius(estimate - truth) / denom
-}
-
-#' Check whether a matrix is symmetric
-#'
-#' Internal utility that determines whether an object is a square matrix and is
-#' symmetric within a specified numerical tolerance.
-#'
-#' @param X An object to be tested for symmetry.
-#' @param tol A nonnegative numeric tolerance used when comparing `X` with its
-#'   transpose. Defaults to `1e-8`.
-#'
-#' @return `TRUE` if `X` is a square symmetric matrix within the specified
-#'   tolerance, and `FALSE` otherwise.
-#'
-#' @keywords internal
-#' @noRd
-mvrsn_is_symmetric <- function(X, tol = 1e-8) {
-  is.matrix(X) && nrow(X) == ncol(X) && isTRUE(all.equal(X, t(X), tolerance = tol))
-}
-
-#' Check whether a matrix is positive definite
-#'
-#' Internal utility that determines whether a matrix is symmetric positive
-#' definite within a specified numerical tolerance. Symmetry is first verified,
-#' after which the eigenvalues of the symmetrized matrix are computed and
-#' compared against the tolerance.
-#'
-#' @param X A numeric matrix to be tested.
-#' @param tol A nonnegative numeric tolerance used to assess positive
-#'   definiteness. Eigenvalues greater than `tol` are regarded as positive.
-#'   Defaults to `1e-10`.
-#'
-#' @return `TRUE` if `X` is symmetric positive definite within the specified
-#'   tolerance, and `FALSE` otherwise.
-#'
-#' @keywords internal
-#' @noRd
-mvrsn_is_posdef <- function(X, tol = 1e-10) {
-  if (!mvrsn_is_symmetric(X, tol = sqrt(tol))) {
-    return(FALSE)
-  }
-  values <- eigen((X + t(X)) / 2, symmetric = TRUE, only.values = TRUE)$values
-  all(values > tol)
-}
-
-#' Assert that a matrix is positive definite
-#'
-#' Internal utility that verifies whether a matrix is symmetric positive
-#' definite. An informative error is raised if the check fails; otherwise,
-#' the function returns invisibly.
-#'
-#' @param X A numeric matrix to be tested.
-#' @param name A character string identifying the matrix in error messages.
-#' @param tol A nonnegative numeric tolerance used to assess positive
-#'   definiteness. Defaults to `1e-10`.
-#'
-#' @return Invisibly returns `TRUE` if `X` is symmetric positive definite.
-#'   Otherwise, the function terminates with an error.
-#'
-#' @keywords internal
-#' @noRd
-mvrsn_assert_posdef <- function(X, name, tol = 1e-10) {
-  if (!mvrsn_is_posdef(X, tol = tol)) {
-    stop(sprintf("%s must be symmetric positive definite.", name), call. = FALSE)
-  }
-  invisible(TRUE)
-}
-
-#' Project a matrix onto the positive definite cone
-#'
-#' Internal utility that replaces eigenvalues smaller than a prescribed
-#' threshold by the threshold value, thereby producing a symmetric positive
-#' definite approximation of the input matrix.
-#'
-#' @param S A numeric square matrix.
-#' @param eig_floor A nonnegative numeric value specifying the minimum allowed
-#'   eigenvalue. Eigenvalues smaller than `eig_floor` are replaced by this
-#'   value. Defaults to `1e-8`.
-#'
-#' @return A symmetric positive definite matrix obtained by eigenvalue
-#'   thresholding.
-#'
-#' @keywords internal
-#' @noRd
-mvrsn_make_posdef <- function(S, eig_floor = 1e-8) {
-  S <- as.matrix(S)
-  S <- (S + t(S)) / 2
-
-  ev <- eigen(S, symmetric = TRUE)
-  values <- pmax(ev$values, eig_floor)
-  S_pd <- ev$vectors %*% diag(values, nrow = length(values)) %*% t(ev$vectors)
-  (S_pd + t(S_pd)) / 2
-}
-
 #' Compute the lower Cholesky factor
 #'
 #' Internal utility that computes the lower triangular Cholesky factor of a
@@ -178,7 +31,7 @@ mvrsn_make_posdef <- function(S, eig_floor = 1e-8) {
 #' @noRd
 mvrsn_chol_lower <- function(S, name = "matrix") {
   S <- as.matrix(S)
-  mvrsn_assert_posdef(S, name)
+  matrix_assert_posdef(S, name)
   t(chol(S))
 }
 
@@ -234,8 +87,8 @@ mvrsn_validate_parameters <- function(X = NULL, M, A, Sigma, Psi, check_posdef =
   }
 
   if (check_posdef) {
-    mvrsn_assert_posdef(Sigma, "Sigma")
-    mvrsn_assert_posdef(Psi, "Psi")
+    matrix_assert_posdef(Sigma, "Sigma")
+    matrix_assert_posdef(Psi, "Psi")
   }
 
   list(M = M, A = A, Sigma = Sigma, Psi = Psi, p = p, q = q)
@@ -285,7 +138,7 @@ mvrsn_make_F <- function(p) {
   for (i in seq_len(p)) {
     E <- matrix(0, p, p)
     E[i, i] <- 1
-    F[, i] <- mvrsn_vec(E)
+    F[, i] <- matrix_vectorize(E)
   }
   F
 }
@@ -343,10 +196,10 @@ mvrsn_initial_values <- function(X,
     # Symmetric or standardized data can have sample skewness very close to
     # zero. A numerically zero A is an absorbing point of the ECM update, so we
     # use a tiny deterministic pattern as a last-resort perturbation.
-    if (mvrsn_frobenius(A) <= .Machine$double.eps^0.25) {
+    if (frobenius_norm(A) <= .Machine$double.eps^0.25) {
       pattern <- matrix(seq_len(p * q), nrow = p, ncol = q)
       pattern <- pattern - mean(pattern)
-      A <- skew_scale * pattern / mvrsn_frobenius(pattern)
+      A <- skew_scale * pattern / frobenius_norm(pattern)
     }
 
     M <- Xbar - sqrt(2 / pi) * A
@@ -393,11 +246,22 @@ mvrsn_log_pmvnorm_upper <- function(upper, mean, sigma) {
 
 #' Mean matrix of the MVRSN distribution
 #'
-#' @param M Location matrix.
-#' @param A Skewness matrix.
+#' Computes the theoretical mean under the matrix-variate row skew-normal
+#' (MVRSN) representation. In this model, independent standard half-normal
+#' latent variables act row by row through a diagonal skewing mechanism,
+#' producing the stochastic form `X = M + W A + V`, with matrix-normal noise
+#' `V`.
 #'
-#' @return The theoretical mean matrix.
+#' @param M Numeric `p` by `q` location matrix.
+#' @param A Numeric `p` by `q` skewness matrix.
 #'
+#' @return A numeric `p` by `q` theoretical mean matrix.
+#'
+#' @examples
+#' M <- matrix(0, 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' mvrsn_mean(M, A)
+#' @family MVCens MVRSN functions
 #' @export
 mvrsn_mean <- function(M, A) {
   M <- as.matrix(M)
@@ -412,15 +276,30 @@ mvrsn_mean <- function(M, A) {
 #' Row and column covariance summaries of the MVRSN distribution
 #'
 #' Computes the theoretical row and column covariance summaries of the
-#' matrix-variate row skew-normal distribution.
+#' matrix-variate row skew-normal distribution. The summaries combine the
+#' separable matrix-normal covariance contribution with the row-specific
+#' half-normal skewing contribution induced by `A`. They correspond to row-wise
+#' and column-wise second moments of the matrix-valued observation, not to the
+#' full vectorized Kronecker covariance matrix.
 #'
 #' @param M Location matrix. It is accepted for API symmetry and dimension
 #'   validation, but it does not enter the covariance formula.
-#' @param A Skewness matrix.
-#' @param Sigma Positive definite row covariance matrix.
-#' @param Psi Positive definite column covariance matrix.
-#' @return A list with `row` and `column` covariance summaries.
+#' @param A Skewness matrix of dimension \eqn{p \times q}.
+#' @param Sigma Positive definite row covariance matrix of dimension
+#'   \eqn{p \times p}.
+#' @param Psi Positive definite column covariance matrix of dimension
+#'   \eqn{q \times q}.
+#' @return A list with `row` (`p` by `p`) and `column` (`q` by `q`) covariance
+#'   summaries.
 #'
+#' @examples
+#' M <- matrix(0, 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' mvrsn_covariances(
+#'   M = M, A = A,
+#'   Sigma = diag(3), Psi = diag(4)
+#' )
+#' @family MVCens MVRSN functions
 #' @export
 mvrsn_covariances <- function(M, A, Sigma, Psi) {
   pars <- mvrsn_validate_parameters(M = M, A = A, Sigma = Sigma, Psi = Psi)
@@ -438,9 +317,11 @@ mvrsn_covariances <- function(M, A, Sigma, Psi) {
 #' Density of the matrix-variate row skew-normal distribution
 #'
 #' Evaluates the closed-form probability density or log-density of a
-#' matrix-variate row skew-normal distribution at a given matrix-valued
-#' observation, using the specified location, skewness, row covariance, and
-#' column covariance parameters.
+#' matrix-variate row skew-normal distribution at one `p` by `q`
+#' matrix-valued observation. Unlike the common-latent MVSN model, MVRSN assigns
+#' an independent half-normal skewing variable to each row, allowing
+#' heterogeneous row-level asymmetry while retaining separable matrix-normal row
+#' and column covariance components.
 #'
 #' @param X Matrix of dimension \eqn{p \times q}.
 #' @param M Location matrix of dimension \eqn{p \times q}.
@@ -454,6 +335,16 @@ mvrsn_covariances <- function(M, A, Sigma, Psi) {
 #' @return A numeric scalar containing the density evaluated at \code{X}.
 #'   When \code{log = TRUE}, the corresponding log-density is returned.
 #'
+#' @examples
+#' X <- matrix(seq(-0.2, 0.9, length.out = 12), 3, 4)
+#' M <- matrix(0, 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' dmvrsn(
+#'   X = X, M = M, A = A,
+#'   Sigma = diag(3), Psi = diag(4)
+#' )
+#' @family MVCens density functions
+#' @family MVCens MVRSN functions
 #' @export
 dmvrsn <- function(X, M, A, Sigma, Psi, log = FALSE) {
 
@@ -470,7 +361,7 @@ dmvrsn <- function(X, M, A, Sigma, Psi, log = FALSE) {
   b <- diag(pars$A %*% Psi_inv %*% t(Y) %*% Sigma_inv)
   Q <- diag(p) + Sigma_inv * (pars$A %*% Psi_inv %*% t(pars$A))
 
-  mvrsn_assert_posdef(Q, "Q")
+  matrix_assert_posdef(Q, "Q")
   Q_inv <- solve(Q)
   mu_cdf <- as.vector(Q_inv %*% b)
 
@@ -494,15 +385,27 @@ dmvrsn <- function(X, M, A, Sigma, Psi, log = FALSE) {
 
 #' Log-likelihood function of the MVRSN distribution
 #'
-#' Sums the closed-form log-density over a sample array p x q x n.
+#' Sums the closed-form MVRSN log-density over a sample array with dimensions
+#' `p` by `q` by `n`. Each slice `X_array[, , i]` is treated as one
+#' matrix-valued observation with row-specific latent skewness.
 #'
-#' @param X_array Sample array with dimensions p x q x n.
-#' @param M Location matrix.
-#' @param A Skewness matrix.
-#' @param Sigma Positive definite row covariance matrix.
-#' @param Psi Positive definite column covariance matrix.
-#' @return Observed-data log-likelihood.
+#' @param X_array Numeric sample array with dimensions `p` by `q` by `n`.
+#' @param M Numeric `p` by `q` location matrix.
+#' @param A Numeric `p` by `q` skewness matrix.
+#' @param Sigma Positive-definite `p` by `p` row covariance matrix.
+#' @param Psi Positive-definite `q` by `q` column covariance matrix.
+#' @return A finite numeric scalar containing the observed-data log-likelihood.
 #'
+#' @examples
+#' x <- array(seq(-0.2, 2.1, length.out = 24), dim = c(3, 4, 2))
+#' M <- matrix(0, 3, 4)
+#' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
+#' loglik_mvrsn(
+#'   x, M = M, A = A,
+#'   Sigma = diag(3), Psi = diag(4)
+#' )
+#' @family MVCens likelihood functions
+#' @family MVCens MVRSN functions
 #' @export
 loglik_mvrsn <- function(X_array, M, A, Sigma, Psi) {
   X_array <- mvrsn_validate_sample_array(X_array)
@@ -528,7 +431,7 @@ loglik_mvrsn <- function(X_array, M, A, Sigma, Psi) {
 #'
 #' @param X Sample array p x q x n.
 #' @param max_iter Maximum ECM iterations.
-#' @param tol Relative log-likelihood convergence tolerance.
+#' @param precision Relative log-likelihood convergence tolerance.
 #' @param normalize_Psi Enforce the identifiability constraint det(Psi) = 1.
 #' @param M_init Optional initial M.
 #' @param A_init Optional initial A.
@@ -545,7 +448,7 @@ loglik_mvrsn <- function(X_array, M, A, Sigma, Psi) {
 #' @keywords internal
 mvrsn_ecm <- function(X,
                       max_iter = 200,
-                      tol = 1e-6,
+                      precision = 1e-6,
                       normalize_Psi = TRUE,
                       M_init = NULL,
                       A_init = NULL,
@@ -584,14 +487,14 @@ mvrsn_ecm <- function(X,
   monotone <- TRUE
   monotone_drops <- numeric(0)
 
-  while (criterion > tol && count < max_iter) {
+  while (criterion > precision && count < max_iter) {
     count <- count + 1L
     if (verbose) {
       cat("Iteration:", count, "\n")
     }
 
-    Sigma <- mvrsn_make_posdef(Sigma, eig_floor = eig_floor)
-    Psi <- mvrsn_make_posdef(Psi, eig_floor = eig_floor)
+    Sigma <- matrix_make_posdef(Sigma, eig_floor = eig_floor)
+    Psi <- matrix_make_posdef(Psi, eig_floor = eig_floor)
     Sigma_inv <- solve(Sigma)
     Psi_inv <- solve(Psi)
 
@@ -604,7 +507,7 @@ mvrsn_ecm <- function(X,
       Y <- X[, , i] - M
       b <- diag(A %*% Psi_inv %*% t(Y) %*% Sigma_inv)
       Q <- diag(p) + Sigma_inv * (A %*% Psi_inv %*% t(A))
-      Q <- mvrsn_make_posdef(Q, eig_floor = eig_floor)
+      Q <- matrix_make_posdef(Q, eig_floor = eig_floor)
       Q_inv <- solve(Q)
 
       mt <- tmvtnorm::mtmvnorm(
@@ -639,7 +542,7 @@ mvrsn_ecm <- function(X,
       Left <- Left + Sigma_inv * S2
       Right <- Right + Wbar_list[[i]] %*% Sigma_inv %*% Y
     }
-    Left <- mvrsn_make_posdef(Left, eig_floor = eig_floor)
+    Left <- matrix_make_posdef(Left, eig_floor = eig_floor)
     A_new <- solve(Left, Right)
 
     # CM-step for Psi.  Delta is E(vec(Y - W A) vec(Y - W A)' | X).
@@ -650,25 +553,25 @@ mvrsn_ecm <- function(X,
       wbar <- wbar_vec_list[[i]]
       S2 <- S_list[[i]] + wbar %*% t(wbar)
       Delta <-
-        mvrsn_vec(Y) %*% t(mvrsn_vec(Y)) -
-        mvrsn_vec(Y) %*% t(mvrsn_vec(Wbar_list[[i]] %*% A_new)) -
-        mvrsn_vec(Wbar_list[[i]] %*% A_new) %*% t(mvrsn_vec(Y)) +
+        matrix_vectorize(Y) %*% t(matrix_vectorize(Y)) -
+        matrix_vectorize(Y) %*% t(matrix_vectorize(Wbar_list[[i]] %*% A_new)) -
+        matrix_vectorize(Wbar_list[[i]] %*% A_new) %*% t(matrix_vectorize(Y)) +
         G %*% S2 %*% t(G)
 
-      L <- mvrsn_chol_lower(mvrsn_make_posdef(Delta, eig_floor = eig_floor), "Delta")
+      L <- mvrsn_chol_lower(matrix_make_posdef(Delta, eig_floor = eig_floor), "Delta")
       for (j in seq_len(p * q)) {
         Bij <- matrix(L[, j], nrow = p, ncol = q)
         Psi_new <- Psi_new + t(Bij) %*% Sigma_inv %*% Bij
       }
     }
-    Psi_new <- mvrsn_make_posdef(Psi_new / (n * p), eig_floor = eig_floor)
+    Psi_new <- matrix_make_posdef(Psi_new / (n * p), eig_floor = eig_floor)
 
     if (normalize_Psi) {
       det_Psi <- det(Psi_new)
       if (!is.finite(det_Psi) || det_Psi <= 0) {
         stop("Psi update has non-positive determinant.", call. = FALSE)
       }
-      Psi_new <- mvrsn_make_posdef(Psi_new / det_Psi^(1 / q), eig_floor = eig_floor)
+      Psi_new <- matrix_make_posdef(Psi_new / det_Psi^(1 / q), eig_floor = eig_floor)
     }
 
     # CM-step for Sigma, now conditioning on the updated Psi.
@@ -679,18 +582,18 @@ mvrsn_ecm <- function(X,
       wbar <- wbar_vec_list[[i]]
       S2 <- S_list[[i]] + wbar %*% t(wbar)
       Delta <-
-        mvrsn_vec(Y) %*% t(mvrsn_vec(Y)) -
-        mvrsn_vec(Y) %*% t(mvrsn_vec(Wbar_list[[i]] %*% A_new)) -
-        mvrsn_vec(Wbar_list[[i]] %*% A_new) %*% t(mvrsn_vec(Y)) +
+        matrix_vectorize(Y) %*% t(matrix_vectorize(Y)) -
+        matrix_vectorize(Y) %*% t(matrix_vectorize(Wbar_list[[i]] %*% A_new)) -
+        matrix_vectorize(Wbar_list[[i]] %*% A_new) %*% t(matrix_vectorize(Y)) +
         G %*% S2 %*% t(G)
 
-      L <- mvrsn_chol_lower(mvrsn_make_posdef(Delta, eig_floor = eig_floor), "Delta")
+      L <- mvrsn_chol_lower(matrix_make_posdef(Delta, eig_floor = eig_floor), "Delta")
       for (j in seq_len(p * q)) {
         Bij <- matrix(L[, j], nrow = p, ncol = q)
         Sigma_new <- Sigma_new + Bij %*% Psi_new_inv %*% t(Bij)
       }
     }
-    Sigma_new <- mvrsn_make_posdef(Sigma_new / (n * q), eig_floor = eig_floor)
+    Sigma_new <- matrix_make_posdef(Sigma_new / (n * q), eig_floor = eig_floor)
 
     M <- M_new
     A <- A_new
@@ -711,7 +614,7 @@ mvrsn_ecm <- function(X,
 
   loglik <- loglik[seq_len(count)]
 
-  if (count == max_iter && criterion > tol) {
+  if (count == max_iter && criterion > precision) {
     warning("The algorithm stopped after reaching the maximum number of iterations without convergence.")
   }
 
@@ -726,7 +629,7 @@ mvrsn_ecm <- function(X,
                   loglik_history = loglik,
                   iterations = count,
                   BIC = BIC,
-                  converged = (criterion <= tol),
+                  converged = (criterion <= precision),
                   criterion = criterion,
                   monotone = monotone,
                   monotone_drops = monotone_drops,
@@ -745,13 +648,24 @@ mvrsn_ecm <- function(X,
 
 #' Parameter set used in the paper's Monte Carlo section
 #'
-#' The returned matrices match the dimensions and values described in the PDF.
-#' Psi is normalized to det(Psi) = 1 by default, matching the identifiability
-#' convention used by the theory.
+#' Constructs a predefined collection of `3` by `4` parameters for the MVRSN
+#' Monte Carlo setting described in the row skew-normal article. The setting is
+#' designed to study recovery of `M`, `A`, `Sigma`, and `Psi` when asymmetry is
+#' driven by independent row-specific half-normal latent variables. `Psi` is
+#' normalized to determinant one by default, matching the row/column scale
+#' identifiability convention used by the implementation.
 #'
-#' @param normalize_Psi Normalize Psi to determinant one.
-#' @return A list with M, A, Sigma, and Psi.
+#' @param normalize_Psi Logical scalar indicating whether `Psi` is normalized
+#'   to determinant one, with reciprocal scaling applied to `Sigma`.
+#' @return A named list containing `M`, `A`, `Sigma`, and `Psi`.
+#' @details The parameter values are provided as a reproducible reference set;
+#'   they are not fitted or estimated by this function.
 #'
+#' @examples
+#' pars <- mvrsn_article_parameters()
+#' names(pars)
+#' det(pars$Psi)
+#' @family MVCens MVRSN functions
 #' @export
 mvrsn_article_parameters <- function(normalize_Psi = TRUE) {
   M <- matrix(c(
@@ -796,10 +710,10 @@ mvrsn_article_parameters <- function(normalize_Psi = TRUE) {
 #' @noRd
 mvrsn_fit_diagnostics <- function(fit, truth) {
   data.frame(
-    err_M = mvrsn_relative_frobenius(fit$M, truth$M),
-    err_A = mvrsn_relative_frobenius(fit$A, truth$A),
-    err_Sigma = mvrsn_relative_frobenius(fit$Sigma, truth$Sigma),
-    err_Psi = mvrsn_relative_frobenius(fit$Psi, truth$Psi),
+    err_M = relative_frobenius_error(fit$M, truth$M),
+    err_A = relative_frobenius_error(fit$A, truth$A),
+    err_Sigma = relative_frobenius_error(fit$Sigma, truth$Sigma),
+    err_Psi = relative_frobenius_error(fit$Psi, truth$Psi),
     loglik = fit$loglik,
     BIC = fit$BIC,
     iterations = fit$iterations,
@@ -823,43 +737,44 @@ mvrsn_fit_diagnostics <- function(fit, truth) {
 #' @param truth Optional list with M, A, Sigma, and Psi. Defaults to article
 #'   parameters.
 #' @param max_iter Maximum ECM iterations for each fit.
-#' @param tol ECM convergence tolerance.
+#' @param precision ECM convergence tolerance.
 #' @param seed Random seed.
 #' @param verbose Print progress and ECM iterations.
+#' @param workers Number of worker processes used for independent replications.
+#'   Defaults to all logical CPU threads available to the host.
 #' @return A list with per-replication results and a sample-size summary.
 #'
-#' @export
+#' @keywords internal
+#' @noRd
 mvrsn_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400, 800, 1600),
                               replications = 200,
                               truth = mvrsn_article_parameters(),
                               max_iter = 200,
-                              tol = 1e-6,
+                              precision = 1e-6,
                               seed = 123,
-                              verbose = FALSE) {
+                              verbose = FALSE,
+                              workers = NULL) {
   if (any(sample_sizes <= 0L) || replications <= 0L) {
     stop("sample_sizes and replications must be positive.", call. = FALSE)
   }
   mvrsn_validate_parameters(M = truth$M, A = truth$A, Sigma = truth$Sigma, Psi = truth$Psi)
 
-  set.seed(seed)
-  rows <- vector("list", length(sample_sizes) * replications)
-  k <- 0L
-
-  for (n in sample_sizes) {
-    for (rep in seq_len(replications)) {
-      k <- k + 1L
-      if (verbose) {
-        cat(sprintf("[MVRSN_MC] n=%s rep=%s/%s\n", n, rep, replications))
-      }
-
+  tasks <- lapply(sample_sizes, function(n) {
+    lapply(seq_len(replications), function(replication) {
+      list(n = n, replication = replication)
+    })
+  })
+  tasks <- unlist(tasks, recursive = FALSE)
+  rows <- run_independent_tasks(tasks, function(task) {
+      n <- task$n
+      rep <- task$replication
       X <- rmvrsn(n, truth$M, truth$A, truth$Sigma, truth$Psi)
       fit <- tryCatch(
-        mvrsn_ecm(X, max_iter = max_iter, tol = tol, verbose = verbose),
+        mvrsn_ecm(X, max_iter = max_iter, precision = precision, verbose = FALSE),
         error = function(e) e
       )
-
       if (inherits(fit, "error")) {
-        rows[[k]] <- data.frame(
+        data.frame(
           n = n,
           replication = rep,
           err_M = NA_real_,
@@ -876,14 +791,13 @@ mvrsn_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400, 800, 1600),
         )
       } else {
         diag <- mvrsn_fit_diagnostics(fit, truth)
-        rows[[k]] <- cbind(
+        cbind(
           data.frame(n = n, replication = rep),
           diag,
           data.frame(error = NA_character_)
         )
       }
-    }
-  }
+  }, seed = seed, workers = workers)
 
   results <- do.call(rbind, rows)
   summary <- do.call(rbind, lapply(split(results, results$n), function(df) {
@@ -902,4 +816,30 @@ mvrsn_monte_carlo <- function(sample_sizes = c(50, 100, 200, 400, 800, 1600),
   rownames(summary) <- NULL
 
   list(results = results, summary = summary, truth = truth)
+}
+
+mvcens_spec_mvrsn <- function() {
+  new_model_spec(
+    name = "MVRSN",
+    validate = function(X = NULL, M = NULL, A = NULL, Sigma = NULL,
+                        Psi = NULL, mode, ...) {
+      if (mode == "fit") mvrsn_validate_sample_array(X)
+      else mvrsn_validate_parameters(M = M, A = A, Sigma = Sigma, Psi = Psi)
+      invisible(TRUE)
+    },
+    loglik = loglik_mvrsn,
+    generate = function(n, M, A, Sigma, Psi, return_latent = FALSE, ...) {
+      rmvrsn(n, M, A, Sigma, Psi, return_latent = return_latent)
+    },
+    parameter_count = function(p, q) model_parameter_count(p, q, skew = TRUE),
+    fit = function(X, cc = NULL, LS = NULL, precision, max_iter,
+                   normalize_Psi = TRUE, M_init = NULL, A_init = NULL,
+                   Sigma_init = NULL, Psi_init = NULL, verbose = FALSE,
+                   eig_floor = 1e-8, monotone_tol = 1e-7, ...) {
+      mvrsn_ecm(X, max_iter = max_iter, precision = precision,
+                normalize_Psi = normalize_Psi, M_init = M_init, A_init = A_init,
+                Sigma_init = Sigma_init, Psi_init = Psi_init, verbose = verbose,
+                eig_floor = eig_floor, monotone_tol = monotone_tol)
+    }
+  )
 }
