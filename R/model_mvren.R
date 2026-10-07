@@ -1022,7 +1022,7 @@ mvren_expected_crossproducts <- function(Y,
 #'   `max_iter`, and `criterion`. Callback failures are ignored so monitoring
 #'   cannot alter the scientific fit.
 #'
-#' @return An object of class `"mvren_fit"`, represented by a list containing:
+#' @return An object of class `"MVREN.ECM"`, represented by a list containing:
 #' \describe{
 #'   \item{M, A, Sigma, Psi, lambda}{The fitted MVREN parameters.}
 #'   \item{loglik}{The final observed-data log-likelihood.}
@@ -1389,28 +1389,32 @@ mvren_ecm <- function(X,
     obj.out
 }
 
-#' Print an MVREN model fit
+#' Print an MVREN ECM fit
 #'
-#' Prints a concise summary of an MVREN ECM fit. This function is retained as
-#' an internal helper and is not documented or exported as part of the public
-#' package interface.
+#' S3 print method for objects returned by [mvren_ecm()]. Objects produced by
+#' `mvren_ecm()` have class `"MVREN.ECM"`, and this method is registered for
+#' that class.
 #'
-#' @param x An object of class `"mvren_fit"`.
-#' @param ... Additional arguments, currently unused.
+#' @param x An object of class `"MVREN.ECM"`.
+#' @param digits Positive integer controlling the number of significant digits
+#'   used when printing the log-likelihood, BIC, and rate vector.
+#' @param ... Additional arguments accepted for compatibility with the base
+#'   [print()] S3 generic; currently unused.
 #'
 #' @return Invisibly returns `x`.
 #'
 #' @keywords internal
 #' @noRd
-#' @exportS3Method print mvren_fit
-print.mvren_fit <- function(x, ...) {
+#' @exportS3Method print MVREN.ECM
+print.MVREN.ECM <- function(x, digits = 8L, ...) {
   cat("Matrix-Variate Row Exponential-Normal ECM fit\n")
   cat("Iterations:", x$iterations, "\n")
   cat("Converged:", x$converged, "\n")
-  cat("Log-likelihood:", format(x$loglik, digits = 8), "\n")
-  cat("BIC:", format(x$BIC, digits = 8), "\n")
+  digits <- validate_positive_integer(digits, "digits")
+  cat("Log-likelihood:", format(x$loglik, digits = digits), "\n")
+  cat("BIC:", format(x$BIC, digits = digits), "\n")
   cat("Rate identification: lambda_i = 1 for all rows\n")
-  cat("lambda:", paste(format(x$lambda, digits = 6), collapse = ", "), "\n")
+  cat("lambda:", paste(format(x$lambda, digits = digits), collapse = ", "), "\n")
   invisible(x)
 }
 
@@ -1693,7 +1697,7 @@ mvcens_spec_mvren <- function() {
   new_model_spec(
     name = "MVREN",
     validate = function(X = NULL, M = NULL, A = NULL, Sigma = NULL,
-                        Psi = NULL, lambda = NULL, mode, ...) {
+                        Psi = NULL, lambda = NULL, mode) {
       if (mode == "fit") mvren_validate_sample_array(X)
       else {
         pars <- mvren_validate_parameters(M = M, A = A, Sigma = Sigma,
@@ -1707,7 +1711,7 @@ mvcens_spec_mvren <- function() {
     },
     loglik = loglik_mvren,
     generate = function(n, M, A, Sigma, Psi, lambda = NULL,
-                        return_latent = FALSE, ...) {
+                        return_latent = FALSE) {
       rmvren(n, M, A, Sigma, Psi, lambda = lambda,
              return_latent = return_latent)
     },

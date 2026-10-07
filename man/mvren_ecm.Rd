@@ -75,7 +75,7 @@ after every completed ECM iteration with arguments \code{iteration},
 cannot alter the scientific fit.}
 }
 \value{
-An object of class \code{"mvren_fit"}, represented by a list containing:
+An object of class \code{"MVREN.ECM"}, represented by a list containing:
 \describe{
 \item{M, A, Sigma, Psi, lambda}{The fitted MVREN parameters.}
 \item{loglik}{The final observed-data log-likelihood.}

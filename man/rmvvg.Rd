@@ -28,18 +28,19 @@ A numeric array of dimension
 \description{
 Generates random matrices from the stochastic representation
 \deqn{
-  X = M + W A + \sqrt{W} Psi,
+  X = M + W A + \sqrt{W} V,
 }
 where \eqn{W \sim \mathrm{Exp}(\mathrm{rate})} and
-\eqn{Psi \sim \mathcal{N}_{p \times q}(0, \Sigma, \Psi)}.
+\eqn{V \sim \mathcal{N}_{p \times q}(0, \Sigma, \Psi)}.
 }
 \details{
 For each sample, the function generates
 \eqn{W \sim \mathrm{Exp}(\mathrm{rate})} and a standard normal matrix
 \eqn{Z \in \mathbb{R}^{p \times q}}. Then it constructs
-\eqn{Psi = L_\Sigma Z L_\Psi^\top}, where \eqn{L_\Sigma} and
-\eqn{L_\Psi} are Cholesky factors of \eqn{\Sigma} and \eqn{\Psi},
-respectively.
+\eqn{V = L_\Sigma Z L_\Psi^\top}, where \eqn{L_\Sigma} and
+\eqn{L_\Psi} are lower-triangular Cholesky factors satisfying
+\eqn{\Sigma = L_\Sigma L_\Sigma^\top} and
+\eqn{\Psi = L_\Psi L_\Psi^\top}, respectively.
 
 The generated observation is then computed as
 \deqn{

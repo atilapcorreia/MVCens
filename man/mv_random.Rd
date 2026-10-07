@@ -4,7 +4,21 @@
 \alias{mv_random}
 \title{Generate observations from a registered matrix-variate model}
 \usage{
-mv_random(model, n, M, A = NULL, Sigma, Psi, ...)
+mv_random(
+  model,
+  n,
+  M,
+  A = NULL,
+  Sigma,
+  Psi,
+  cens = NULL,
+  Ind = 1L,
+  nu = NULL,
+  lambda = NULL,
+  gamma_tilde = 2,
+  rate = 1,
+  return_latent = FALSE
+)
 }
 \arguments{
 \item{model}{One registered model name. Matching is case-insensitive.}
@@ -14,23 +28,48 @@ mv_random(model, n, M, A = NULL, Sigma, Psi, ...)
 \item{M}{Numeric \code{p} by \code{q} location matrix.}
 
 \item{A}{Optional \code{p} by \code{q} skewness or latent-effect matrix. It is
-required by skewed and latent-effect models and ignored by \code{MVN}.}
+required by \code{MVSN}, \code{MVSNC}, \code{MVST}, \code{MVRSN}, \code{MVREN}, \code{MVNIG}, and
+\code{MVVG}; it is ignored by \code{MVN} and \code{MVNC}.}
 
 \item{Sigma}{Positive-definite \code{p} by \code{p} row covariance or scale matrix.}
 
 \item{Psi}{Positive-definite \code{q} by \code{q} column covariance or scale matrix.}
 
-\item{...}{Model-specific generation parameters, such as \code{cens}, \code{Ind},
-\code{nu}, \code{lambda}, \code{gamma_tilde}, \code{rate}, or \code{return_latent}. For censored
-generators, \code{cc = 1} marks censored entries and \code{LS} stores their upper
-censoring limits. For \code{MVREN}, the supplied \code{lambda} must be omitted or a
-vector of ones.}
+\item{cens}{Censoring proportion in \verb{[0, 1]}. Required for \code{MVNC} and
+\code{MVSNC}; for \code{MVNIG}, \code{NULL} is interpreted as \code{0}.}
+
+\item{Ind}{Integer censoring/missingness mechanism used by \code{MVNC}, \code{MVSNC},
+and \code{MVNIG}: \code{1} for interval censoring, \code{2} for missing values, and \code{3}
+for a mixture of interval censoring and missingness.}
+
+\item{nu}{Degrees of freedom for \code{MVST}. This argument is required when
+generating from \code{MVST}.}
+
+\item{lambda}{Optional row-specific exponential rate vector for \code{MVREN}.
+Under the package identification convention, all supplied entries must be
+equal to one. \code{NULL} uses a vector of ones.}
+
+\item{gamma_tilde}{Positive inverse-Gaussian parameter used by \code{MVNIG}.}
+
+\item{rate}{Positive Gamma rate parameter used by \code{MVVG}.}
+
+\item{return_latent}{Logical. For \code{MVRSN} and \code{MVREN}, if \code{TRUE}, return
+both the generated array \code{X} and the latent variables \code{W}; otherwise return
+only the generated array.}
 }
 \value{
-For complete-data models, a numeric array with dimensions
-\code{p} by \code{q} by \code{n}. Censored generators return a list containing the
-observed array and censoring metadata (\code{cc} and \code{LS}), and may include
-the uncensored array for audit purposes.
+The return type depends on the model and generation options:
+\itemize{
+\item \code{MVN}, \code{MVSN}, \code{MVST}, and \code{MVVG} return a numeric array with
+dimensions \code{p} by \code{q} by \code{n}.
+\item \code{MVRSN} and \code{MVREN} also return that array by default; with
+\code{return_latent = TRUE}, they return a list with components \code{X} (the
+generated array) and \code{W} (the latent variables).
+\item \code{MVNC} and \code{MVSNC} return a list with \code{X.cens}, \code{cc}, and \code{LS}.
+\item \code{MVNIG} returns a list with \code{X.cens}, \code{cc}, \code{LS}, and \code{X.or}.
+}
+In particular, an ordinary \code{MVN} call returns the array itself, so it should
+be used as \code{x}, not \code{x$X}.
 }
 \description{
 Validates the common matrix-variate generation contract and dispatches to
@@ -47,9 +86,9 @@ case-insensitive.
 \details{
 The following models are available: \code{MVN}, \code{MVNC}, \code{MVSN}, \code{MVSNC}, \code{MVST},
 \code{MVRSN}, \code{MVREN}, \code{MVNIG}, and \code{MVVG}. \code{MVNC}, \code{MVSNC}, and \code{MVNIG} can
-return censored-data structures; \code{MVVG} uses the additional \code{rate}
-argument; \code{MVST} uses \code{nu}; and the high-level \code{MVREN} interface uses the
-identified convention \code{lambda_i = 1}.
+return censored-data structures; \code{MVVG} uses \code{rate}; \code{MVST} uses \code{nu}; and
+the high-level \code{MVREN} interface uses the identified convention
+\code{lambda_i = 1}.
 
 Random-number generation is delegated to the model specification;
 this function does not fit parameters or alter the supplied scientific
@@ -58,13 +97,123 @@ required. The returned object should be treated as generated data, not as
 evidence that a model has been fitted or validated for a real data set.
 }
 \examples{
+## Common parameter matrices used throughout the examples
 set.seed(123)
-M <- matrix(0, 3, 4)
-x <- mv_random(
-  "MVN", n = 5, M = M,
-  Sigma = diag(3), Psi = diag(4)
+p <- 2
+q <- 2
+M <- matrix(0, p, q)
+A <- matrix(c(0.4, 0.2, 0.1, 0.3), p, q)
+Sigma <- matrix(c(1.0, 0.2, 0.2, 1.0), p, p)
+Psi <- matrix(c(1.0, 0.1, 0.1, 1.0), q, q)
+
+## 1. MVN: complete matrix-normal data
+x_mvn <- mv_random(
+  model = "MVN", n = 5, M = M,
+  Sigma = Sigma, Psi = Psi
 )
-dim(x)
+dim(x_mvn)
+# MVN returns the array itself, not a list: use x_mvn, not x_mvn$X.
+
+## 2. MVNC: matrix-normal data with the three supported mechanisms
+x_mvnc_interval <- mv_random(
+  model = "MVNC", n = 5, M = M,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 1
+)
+x_mvnc_missing <- mv_random(
+  model = "MVNC", n = 5, M = M,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 2
+)
+x_mvnc_mixed <- mv_random(
+  model = "MVNC", n = 5, M = M,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 3
+)
+names(x_mvnc_interval)
+
+## 3. MVSN: complete matrix-variate skew-normal data
+x_mvsn <- mv_random(
+  model = "MVSN", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi
+)
+dim(x_mvsn)
+
+## 4. MVSNC: skew-normal data with each censoring/missingness mechanism
+x_mvsnc_interval <- mv_random(
+  model = "MVSNC", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 1
+)
+x_mvsnc_missing <- mv_random(
+  model = "MVSNC", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 2
+)
+x_mvsnc_mixed <- mv_random(
+  model = "MVSNC", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 3
+)
+names(x_mvsnc_interval)
+
+## 5. MVST: matrix-variate skew-t data; nu is required
+x_mvst <- mv_random(
+  model = "MVST", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, nu = 6
+)
+dim(x_mvst)
+
+## 6. MVRSN: row skew-normal data
+x_mvrsn <- mv_random(
+  model = "MVRSN", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi
+)
+mvrsn_latent <- mv_random(
+  model = "MVRSN", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, return_latent = TRUE
+)
+names(mvrsn_latent)
+dim(mvrsn_latent$X)
+dim(mvrsn_latent$W)
+
+## 7. MVREN: row exponential-normal data
+## The identified high-level interface uses lambda_i = 1.
+x_mvren <- mv_random(
+  model = "MVREN", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi
+)
+mvren_latent <- mv_random(
+  model = "MVREN", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, lambda = rep(1, p),
+  return_latent = TRUE
+)
+names(mvren_latent)
+dim(mvren_latent$X)
+dim(mvren_latent$W)
+
+## 8. MVNIG: complete data (cens = NULL or 0) and censored data
+x_mvnig_complete <- mv_random(
+  model = "MVNIG", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, gamma_tilde = 2
+)
+x_mvnig_interval <- mv_random(
+  model = "MVNIG", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 1,
+  gamma_tilde = 2
+)
+x_mvnig_missing <- mv_random(
+  model = "MVNIG", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 2,
+  gamma_tilde = 2
+)
+x_mvnig_mixed <- mv_random(
+  model = "MVNIG", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, cens = 0.20, Ind = 3,
+  gamma_tilde = 2
+)
+names(x_mvnig_complete)
+
+## 9. MVVG: matrix-variate variance-gamma data
+x_mvvg <- mv_random(
+  model = "MVVG", n = 5, M = M, A = A,
+  Sigma = Sigma, Psi = Psi, rate = 1.5
+)
+dim(x_mvvg)
 }
 \seealso{
 \code{\link[=mv_fit]{mv_fit()}}, \code{\link[=mv_monte_carlo]{mv_monte_carlo()}}

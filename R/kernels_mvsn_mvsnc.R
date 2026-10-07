@@ -180,6 +180,8 @@ prob_opt <- function(lower = rep(-Inf, ncol(sigma)),
 #' A <- matrix(seq(0.1, 1.2, length.out = 12), 3, 4)
 #' dmvsn(as.vector(Y), mu = rep(0, 12), Sigma = diag(12), lambda = as.vector(A))
 #' @family MVCens density functions
+#' @name dmvsn
+#' @aliases dmvsn
 #' @export
 
 dmvsn <- function(y, mu, Sigma, lambda, epsilon = 1e-8) {

@@ -20,7 +20,7 @@ rmvren(n, M, A, Sigma, Psi, lambda = NULL, return_latent = FALSE)
 \code{q}.}
 
 \item{lambda}{Optional positive rate vector of length \code{p}. When \code{NULL}, a
-vector of ones is used. The high-level \code{mv_random("MVREN", ...)} API
+vector of ones is used. The high-level \code{mv_random()} API for \code{model = "MVREN"}
 accepts only the unit vector; non-unit values here are retained for the
 unexported general stochastic representation.}
 

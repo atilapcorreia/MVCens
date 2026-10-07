@@ -14,7 +14,22 @@ mv_monte_carlo(
   max_iter = 500L,
   seed = 123L,
   progress_dir = NULL,
-  ...
+  cens = NULL,
+  Ind = 1L,
+  verbose = FALSE,
+  nu = NULL,
+  lambda = NULL,
+  epsilon = NULL,
+  get.nu = NULL,
+  nu_bounds = NULL,
+  normalize_Psi = NULL,
+  M_init = NULL,
+  A_init = NULL,
+  Sigma_init = NULL,
+  Psi_init = NULL,
+  q_policy = NULL,
+  eig_floor = NULL,
+  monotone_tol = NULL
 )
 }
 \arguments{
@@ -26,7 +41,9 @@ mv_monte_carlo(
 \item{replications}{Positive number of replications per sample size.}
 
 \item{truth}{Named list containing the data-generating parameters, typically
-\code{M}, \code{Sigma}, \code{Psi}, and, for skewed or latent-effect models, \code{A}.}
+\code{M}, \code{Sigma}, \code{Psi}, and, for skewed or latent-effect models, \code{A}.
+\code{MVST} may also obtain \code{nu} from this list and \code{MVREN} may obtain \code{lambda}
+from it.}
 
 \item{workers}{Number of parallel workers; \code{NULL} uses all logical CPUs.}
 
@@ -40,13 +57,55 @@ mv_monte_carlo(
 MVREN ECM iteration progress. Files are removed when each replication
 finishes. \code{NULL} disables progress reporting.}
 
-\item{...}{Model-specific options such as \code{cens} or \code{Ind}; censored
-campaigns use \code{cc = 1} for censored entries in generated samples.}
+\item{cens}{Censoring proportion for \code{MVNC} and \code{MVSNC}. It must be supplied
+for censored campaigns.}
+
+\item{Ind}{Integer censoring/missingness mechanism for \code{MVNC} and \code{MVSNC}:
+\code{1} for interval censoring, \code{2} for missing values, and \code{3} for a mixture.}
+
+\item{verbose}{Logical verbosity control passed to models that support it.}
+
+\item{nu}{Optional degrees of freedom for \code{MVST}. If \code{NULL}, the value in
+\code{truth$nu} is used.}
+
+\item{lambda}{Optional exponential-rate vector used when generating \code{MVREN}
+samples. If \code{NULL}, \code{truth$lambda} is used; if that is also \code{NULL}, the
+MVREN generator uses its identified vector of ones.}
+
+\item{epsilon}{Optional numerical tolerance for \code{MVSN}, \code{MVSNC}, and \code{MVST}.}
+
+\item{get.nu}{Optional logical control for updating \code{nu} in \code{MVST}.}
+
+\item{nu_bounds}{Optional length-two interval for the MVST \code{nu} update.}
+
+\item{normalize_Psi}{Optional logical control for MVRSN normalization of
+\code{Psi}.}
+
+\item{M_init}{Optional initial location matrix for \code{MVRSN} and \code{MVREN}.}
+
+\item{A_init}{Optional initial latent-effect/skewness matrix for \code{MVRSN} and
+\code{MVREN}.}
+
+\item{Sigma_init}{Optional initial row covariance matrix for \code{MVRSN} and
+\code{MVREN}.}
+
+\item{Psi_init}{Optional initial column covariance matrix for \code{MVRSN} and
+\code{MVREN}.}
+
+\item{q_policy}{Optional MVREN \code{Q}-matrix handling policy: \code{"warn"},
+\code{"strict"}, or \code{"regularize"}.}
+
+\item{eig_floor}{Optional positive eigenvalue floor for \code{MVRSN}.}
+
+\item{monotone_tol}{Optional MVRSN likelihood-monotonicity tolerance.}
 }
 \value{
 A list with per-replication \code{results}, grouped \code{summary}, and the
-supplied \code{truth}. The summary is descriptive and does not change model
-defaults or fitted estimates.
+supplied \code{truth}. The summary contains one \verb{median_err_*} column for each
+error measure present in \code{results}; when no valid estimate is available
+for a measure within a sample-size group, its median is returned as \code{NA}
+rather than omitting the column. The summary is descriptive and does not
+change model defaults or fitted estimates.
 }
 \description{
 Runs repeated generate-and-fit experiments for a registered estimable model.
@@ -59,16 +118,119 @@ sequential, preserving their mathematical update order. Random streams are
 reproducible across worker counts for a fixed seed.
 }
 \examples{
-truth <- list(
-  M = matrix(0, 3, 4),
-  Sigma = diag(3),
-  Psi = diag(4)
+## Each campaign below uses one replication and one ECM iteration only to
+## demonstrate the interface. Increase both values for a real simulation.
+\donttest{
+p <- 2
+q <- 2
+M <- matrix(0, p, q)
+A <- matrix(c(0.4, 0.2, 0.1, 0.3), p, q)
+Sigma <- matrix(c(1.0, 0.2, 0.2, 1.0), p, p)
+Psi <- matrix(c(1.0, 0.1, 0.1, 1.0), q, q)
+truth_mvn <- list(M = M, Sigma = Sigma, Psi = Psi)
+truth_skew <- list(M = M, A = A, Sigma = Sigma, Psi = Psi)
+
+## 1. MVN: one or several sample sizes can be studied.
+mc_mvn <- mv_monte_carlo(
+  model = "MVN", sample_sizes = c(20, 30), replications = 1,
+  truth = truth_mvn, workers = 1,
+  precision = 1e-6, max_iter = 1, seed = 123
 )
-study <- mv_monte_carlo(
-  "MVN", sample_sizes = 5, replications = 1, truth = truth,
+mc_mvn$summary
+
+## 2. MVNC: all three censoring/missingness mechanisms.
+mc_mvnc_interval <- mv_monte_carlo(
+  "MVNC", sample_sizes = 20, replications = 1, truth = truth_mvn,
+  cens = 0.15, Ind = 1, workers = 1, max_iter = 1, seed = 123
+)
+mc_mvnc_missing <- mv_monte_carlo(
+  "MVNC", sample_sizes = 20, replications = 1, truth = truth_mvn,
+  cens = 0.15, Ind = 2, workers = 1, max_iter = 1, seed = 123
+)
+mc_mvnc_mixed <- mv_monte_carlo(
+  "MVNC", sample_sizes = 20, replications = 1, truth = truth_mvn,
+  cens = 0.15, Ind = 3, workers = 1, max_iter = 1, seed = 123
+)
+
+## 3. MVSN: epsilon is forwarded to the skew-normal ECM fit.
+mc_mvsn <- mv_monte_carlo(
+  "MVSN", sample_sizes = 20, replications = 1, truth = truth_skew,
+  epsilon = 1e-8, workers = 1, max_iter = 1, seed = 123
+)
+
+## 4. MVSNC: all three mechanisms are supported here as well.
+mc_mvsnc_interval <- mv_monte_carlo(
+  "MVSNC", sample_sizes = 20, replications = 1, truth = truth_skew,
+  cens = 0.15, Ind = 1, epsilon = 1e-8,
   workers = 1, max_iter = 1, seed = 123
 )
-study$summary
+mc_mvsnc_missing <- mv_monte_carlo(
+  "MVSNC", sample_sizes = 20, replications = 1, truth = truth_skew,
+  cens = 0.15, Ind = 2, epsilon = 1e-8,
+  workers = 1, max_iter = 1, seed = 123
+)
+mc_mvsnc_mixed <- mv_monte_carlo(
+  "MVSNC", sample_sizes = 20, replications = 1, truth = truth_skew,
+  cens = 0.15, Ind = 3, epsilon = 1e-8,
+  workers = 1, max_iter = 1, seed = 123
+)
+
+## 5. MVST: nu can come from truth or be supplied directly.
+truth_mvst <- c(truth_skew, list(nu = 6))
+mc_mvst_fixed <- mv_monte_carlo(
+  "MVST", sample_sizes = 20, replications = 1, truth = truth_mvst,
+  get.nu = FALSE, epsilon = 1e-8,
+  workers = 1, max_iter = 1, seed = 123
+)
+mc_mvst_estimated <- mv_monte_carlo(
+  "MVST", sample_sizes = 20, replications = 1, truth = truth_mvst,
+  get.nu = TRUE, nu_bounds = c(2.01, 50), epsilon = 1e-8,
+  workers = 1, max_iter = 1, seed = 123
+)
+mc_mvst_nu_argument <- mv_monte_carlo(
+  "MVST", sample_sizes = 20, replications = 1, truth = truth_skew,
+  nu = 6, get.nu = FALSE,
+  workers = 1, max_iter = 1, seed = 123
+)
+
+## 6. MVRSN: Psi normalization can be enabled or disabled.
+mc_mvrsn_normalized <- mv_monte_carlo(
+  "MVRSN", sample_sizes = 20, replications = 1, truth = truth_skew,
+  normalize_Psi = TRUE, eig_floor = 1e-8, monotone_tol = 1e-7,
+  workers = 1, max_iter = 1, seed = 123
+)
+mc_mvrsn_custom <- mv_monte_carlo(
+  "MVRSN", sample_sizes = 20, replications = 1, truth = truth_skew,
+  normalize_Psi = FALSE,
+  M_init = M, A_init = A, Sigma_init = Sigma, Psi_init = Psi,
+  verbose = FALSE, workers = 1, max_iter = 1, seed = 123
+)
+
+## 7. MVREN: lambda is fixed to one under the identified parameterization.
+truth_mvren <- c(truth_skew, list(lambda = rep(1, p)))
+mc_mvren_warn <- mv_monte_carlo(
+  "MVREN", sample_sizes = 20, replications = 1, truth = truth_mvren,
+  q_policy = "warn", workers = 1, max_iter = 1, seed = 123
+)
+mc_mvren_strict <- mv_monte_carlo(
+  "MVREN", sample_sizes = 20, replications = 1, truth = truth_mvren,
+  q_policy = "strict", workers = 1, max_iter = 1, seed = 123
+)
+mc_mvren_regularized <- mv_monte_carlo(
+  "MVREN", sample_sizes = 20, replications = 1, truth = truth_skew,
+  lambda = rep(1, p), q_policy = "regularize",
+  M_init = M, A_init = A, Sigma_init = Sigma, Psi_init = Psi,
+  workers = 1, max_iter = 1, seed = 123
+)
+
+## Optional MVREN transient progress files.
+mc_mvren_progress <- mv_monte_carlo(
+  "MVREN", sample_sizes = 20, replications = 1, truth = truth_mvren,
+  q_policy = "warn", progress_dir = tempdir(),
+  workers = 1, max_iter = 1, seed = 123
+)
+
+}
 }
 \seealso{
 Other MVCens main interface:

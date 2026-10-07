@@ -27,6 +27,8 @@
 #'   lambda = as.vector(A), nu = 5
 #' )
 #' @family MVCens density functions
+#' @name dmvst
+#' @aliases dmvst
 #' @export
 dmvst <- function(y, mu, Sigma, lambda, nu, epsilon = 1e-8, log = FALSE) {
 
@@ -507,7 +509,7 @@ mvcens_spec_mvst <- function() {
   new_model_spec(
     name = "MVST",
     validate = function(X = NULL, M = NULL, A = NULL, Sigma = NULL,
-                        Psi = NULL, nu = NULL, mode, ...) {
+                        Psi = NULL, nu = NULL, mode) {
       if (mode == "fit") validate_mvn_input(X)
       else validate_model_parameters(M, Sigma, Psi, A, require_A = TRUE)
       if (mode == "fit" && !is.null(nu) &&
@@ -517,12 +519,12 @@ mvcens_spec_mvst <- function() {
       }
       invisible(TRUE)
     },
-    initialize = function(X, max_iter = 200L, ...) initialize_ecm_state(X, max_iter),
+    initialize = function(X, max_iter = 200L) initialize_ecm_state(X, max_iter),
     loglik = loglik_mvst,
-    generate = function(n, M, A, Sigma, Psi, nu, ...) rmvst(n, M, A, Sigma, Psi, nu),
+    generate = function(n, M, A, Sigma, Psi, nu) rmvst(n, M, A, Sigma, Psi, nu),
     parameter_count = function(p, q) model_parameter_count(p, q, skew = TRUE, extra = 1L),
     fit = function(X, cc = NULL, LS = NULL, precision, max_iter, nu = 4,
-                   get.nu = TRUE, nu_bounds = c(2.01, 150), epsilon = 1e-8, ...) {
+                   get.nu = TRUE, nu_bounds = c(2.01, 150), epsilon = 1e-8) {
       mvst_ecm(X, nu = nu, precision = precision, max_iter = max_iter,
                get.nu = get.nu, epsilon = epsilon, nu_bounds = nu_bounds)
     }

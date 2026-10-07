@@ -461,10 +461,10 @@ rmvnig <- function(n, cens, Ind, M, Sigma, Psi, A, gamma_tilde = 2) {
 #'
 #' Generates random matrices from the stochastic representation
 #' \deqn{
-#'   X = M + W A + \sqrt{W} Psi,
+#'   X = M + W A + \sqrt{W} V,
 #' }
 #' where \eqn{W \sim \mathrm{Exp}(\mathrm{rate})} and
-#' \eqn{Psi \sim \mathcal{N}_{p \times q}(0, \Sigma, \Psi)}.
+#' \eqn{V \sim \mathcal{N}_{p \times q}(0, \Sigma, \Psi)}.
 #'
 #' @param n Positive integer. Number of random matrices to generate.
 #' @param M Numeric matrix of dimension \eqn{p \times q}. Location matrix.
@@ -482,9 +482,10 @@ rmvnig <- function(n, cens, Ind, M, Sigma, Psi, A, gamma_tilde = 2) {
 #' For each sample, the function generates
 #' \eqn{W \sim \mathrm{Exp}(\mathrm{rate})} and a standard normal matrix
 #' \eqn{Z \in \mathbb{R}^{p \times q}}. Then it constructs
-#' \eqn{Psi = L_\Sigma Z L_\Psi^\top}, where \eqn{L_\Sigma} and
-#' \eqn{L_\Psi} are Cholesky factors of \eqn{\Sigma} and \eqn{\Psi},
-#' respectively.
+#' \eqn{V = L_\Sigma Z L_\Psi^\top}, where \eqn{L_\Sigma} and
+#' \eqn{L_\Psi} are lower-triangular Cholesky factors satisfying
+#' \eqn{\Sigma = L_\Sigma L_\Sigma^\top} and
+#' \eqn{\Psi = L_\Psi L_\Psi^\top}, respectively.
 #'
 #' The generated observation is then computed as
 #' \deqn{
@@ -554,7 +555,7 @@ rmvvg <- function(n, M, A, Sigma, Psi, rate = 1) {
   for (i in seq_len(n)) {
     W <- stats::rexp(1, rate = rate)
     Z <- matrix(stats::rnorm(p * q), nrow = p, ncol = q)
-    E <- chol_U %*% Z %*% t(chol_V)
+    E <- t(chol_U) %*% Z %*% chol_V
 
     X_array[, , i] <- M + W * A + sqrt(W) * E
   }
@@ -628,7 +629,7 @@ rmvrsn <- function(n, M, A, Sigma, Psi, seed = NULL, return_latent = FALSE) {
 #' @param Psi Positive-definite column covariance matrix of dimension `q` by
 #'   `q`.
 #' @param lambda Optional positive rate vector of length `p`. When `NULL`, a
-#'   vector of ones is used. The high-level `mv_random("MVREN", ...)` API
+#'   vector of ones is used. The high-level `mv_random()` API for `model = "MVREN"`
 #'   accepts only the unit vector; non-unit values here are retained for the
 #'   unexported general stochastic representation.
 #' @param return_latent If `TRUE`, return the generated latent exponential

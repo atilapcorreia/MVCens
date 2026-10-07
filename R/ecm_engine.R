@@ -84,12 +84,68 @@ get_model_spec <- function(model, require_fit = FALSE) {
 }
 
 run_ecm_model <- function(spec, X, cc = NULL, LS = NULL,
-                          precision = 1e-6, max_iter = 200L, ...) {
+                          precision = 1e-6, max_iter = 200L,
+                          epsilon = NULL, nu = NULL, get.nu = NULL,
+                          nu_bounds = NULL, normalize_Psi = NULL,
+                          M_init = NULL, A_init = NULL,
+                          Sigma_init = NULL, Psi_init = NULL,
+                          q_policy = NULL, verbose = NULL,
+                          eig_floor = NULL, monotone_tol = NULL,
+                          progress_callback = NULL) {
   validate_fit_controls(precision, max_iter)
-  spec$validate(X = X, cc = cc, LS = LS, mode = "fit", ...)
+
+  switch(
+    spec$name,
+    MVNC = spec$validate(X = X, cc = cc, LS = LS, mode = "fit"),
+    MVSNC = spec$validate(X = X, cc = cc, LS = LS, mode = "fit"),
+    MVST = spec$validate(X = X, nu = nu, mode = "fit"),
+    spec$validate(X = X, mode = "fit")
+  )
+
   if (!is.function(spec$fit)) {
     stop(sprintf("Model '%s' has no fit implementation.", spec$name), call. = FALSE)
   }
-  spec$fit(X = X, cc = cc, LS = LS, precision = precision,
-           max_iter = max_iter, ...)
+
+  fit_args <- list(
+    X = X, cc = cc, LS = LS,
+    precision = precision, max_iter = max_iter
+  )
+
+  add_if_supplied <- function(name, value) {
+    if (!is.null(value)) fit_args[[name]] <<- value
+  }
+
+  if (identical(spec$name, "MVSN") || identical(spec$name, "MVSNC")) {
+    add_if_supplied("epsilon", epsilon)
+  }
+
+  if (identical(spec$name, "MVST")) {
+    add_if_supplied("nu", nu)
+    add_if_supplied("get.nu", get.nu)
+    add_if_supplied("nu_bounds", nu_bounds)
+    add_if_supplied("epsilon", epsilon)
+  }
+
+  if (identical(spec$name, "MVRSN")) {
+    add_if_supplied("normalize_Psi", normalize_Psi)
+    add_if_supplied("M_init", M_init)
+    add_if_supplied("A_init", A_init)
+    add_if_supplied("Sigma_init", Sigma_init)
+    add_if_supplied("Psi_init", Psi_init)
+    add_if_supplied("verbose", verbose)
+    add_if_supplied("eig_floor", eig_floor)
+    add_if_supplied("monotone_tol", monotone_tol)
+  }
+
+  if (identical(spec$name, "MVREN")) {
+    add_if_supplied("M_init", M_init)
+    add_if_supplied("A_init", A_init)
+    add_if_supplied("Sigma_init", Sigma_init)
+    add_if_supplied("Psi_init", Psi_init)
+    add_if_supplied("q_policy", q_policy)
+    add_if_supplied("verbose", verbose)
+    add_if_supplied("progress_callback", progress_callback)
+  }
+
+  do.call(spec$fit, fit_args)
 }

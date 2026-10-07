@@ -477,7 +477,12 @@ mvrsn_ecm <- function(X,
 
   mvrsn_validate_parameters(M = M, A = A, Sigma = Sigma, Psi = Psi)
   if (normalize_Psi) {
-    Psi <- Psi / det(Psi)^(1 / q)
+    scale_Psi <- det(Psi)^(1 / q)
+    if (!is.finite(scale_Psi) || scale_Psi <= 0) {
+      stop("Initial Psi has a non-positive determinant.", call. = FALSE)
+    }
+    Psi <- Psi / scale_Psi
+    Sigma <- Sigma * scale_Psi
   }
 
   Fmat <- mvrsn_make_F(p)
@@ -694,7 +699,12 @@ mvrsn_article_parameters <- function(normalize_Psi = TRUE) {
   ), nrow = 4, ncol = 4)
 
   if (normalize_Psi) {
-    Psi <- Psi / det(Psi)^(1 / nrow(Psi))
+    scale_Psi <- det(Psi)^(1 / nrow(Psi))
+    if (!is.finite(scale_Psi) || scale_Psi <= 0) {
+      stop("Psi has a non-positive determinant.", call. = FALSE)
+    }
+    Psi <- Psi / scale_Psi
+    Sigma <- Sigma * scale_Psi
   }
 
   list(M = M, A = A, Sigma = Sigma, Psi = Psi)
@@ -822,20 +832,20 @@ mvcens_spec_mvrsn <- function() {
   new_model_spec(
     name = "MVRSN",
     validate = function(X = NULL, M = NULL, A = NULL, Sigma = NULL,
-                        Psi = NULL, mode, ...) {
+                        Psi = NULL, mode) {
       if (mode == "fit") mvrsn_validate_sample_array(X)
       else mvrsn_validate_parameters(M = M, A = A, Sigma = Sigma, Psi = Psi)
       invisible(TRUE)
     },
     loglik = loglik_mvrsn,
-    generate = function(n, M, A, Sigma, Psi, return_latent = FALSE, ...) {
+    generate = function(n, M, A, Sigma, Psi, return_latent = FALSE) {
       rmvrsn(n, M, A, Sigma, Psi, return_latent = return_latent)
     },
     parameter_count = function(p, q) model_parameter_count(p, q, skew = TRUE),
     fit = function(X, cc = NULL, LS = NULL, precision, max_iter,
                    normalize_Psi = TRUE, M_init = NULL, A_init = NULL,
                    Sigma_init = NULL, Psi_init = NULL, verbose = FALSE,
-                   eig_floor = 1e-8, monotone_tol = 1e-7, ...) {
+                   eig_floor = 1e-8, monotone_tol = 1e-7) {
       mvrsn_ecm(X, max_iter = max_iter, precision = precision,
                 normalize_Psi = normalize_Psi, M_init = M_init, A_init = A_init,
                 Sigma_init = Sigma_init, Psi_init = Psi_init, verbose = verbose,
