@@ -161,7 +161,7 @@ dj$dj_data[["1920"]]
 X_original <- dj$X_raw
 ```
 
-As documented in the supplied manual, the function returns `X_raw`, `X_std`, and a named annual-matrix list `dj_data`. It saves `dow_jones_1920_1934_processed.rds` in `output_dir`; use `readRDS()` to reload it. Because the 15 matrices represent consecutive years, their independence should not be assumed automatically.
+As documented in the supplied manual, the function returns `X_raw`, `X_std`, and a named annual-matrix list `dj_data`. It saves `dow_jones_1920_1934_processed.rds` in `output_dir`; use `readRDS()` to reload it.
 
 ## Documentation
 
